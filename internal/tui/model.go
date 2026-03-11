@@ -68,7 +68,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
-		case "q", "ctrl+c":
+		case "q", "ctrl+c", "f10":
 			return m, tea.Quit
 		}
 	}
@@ -131,7 +131,20 @@ func viewTokenScreen(m Model) tea.View {
 }
 
 func updateMainScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	// F7 will be added in a later commit
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		switch msg.String() {
+		case "f7":
+			// FR-107: switch to token screen (reset/change key)
+			m.Screen = ScreenToken
+			m.TokenInput = ""
+			m.TokenError = ""
+			if m.Config != nil {
+				m.Config.APIKey = ""
+			}
+			return m, nil
+		}
+	}
 	return m, nil
 }
 
