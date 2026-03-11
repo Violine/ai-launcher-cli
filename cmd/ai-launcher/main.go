@@ -6,12 +6,16 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
+
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/ai-launcher/cli/internal/config"
 	"github.com/ai-launcher/cli/internal/modules/agentrun"
 	"github.com/ai-launcher/cli/internal/modules/autoupdate"
 	"github.com/ai-launcher/cli/internal/modules/configgen"
 	"github.com/ai-launcher/cli/internal/modules/mcpupdate"
+	"github.com/ai-launcher/cli/internal/tui"
 	"github.com/ai-launcher/cli/internal/updater"
 	"github.com/ai-launcher/cli/pkg/plugin"
 )
@@ -39,13 +43,27 @@ func main() {
 		byName[p.Name()] = p
 	}
 
+	// No args: start TUI (agreed default)
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage: ai-launcher <command>")
-		fmt.Fprintln(os.Stderr, "Commands:")
+		commandNames := make([]string, 0, len(plugins))
 		for _, p := range plugins {
-			fmt.Fprintf(os.Stderr, "  %s\n", p.Name())
+			commandNames = append(commandNames, p.Name())
 		}
-		os.Exit(1)
+		p := tea.NewProgram(tui.NewModelNoConfig(commandNames))
+		if _, err := p.Run(); err != nil {
+			// No TTY (e.g. pipe, IDE): show usage and exit 0 instead of failing
+			if strings.Contains(err.Error(), "TTY") || strings.Contains(err.Error(), "tty") {
+				fmt.Println("Usage: ai-launcher [<command>]")
+				fmt.Println("Commands:")
+				for _, name := range commandNames {
+					fmt.Printf("  %s\n", name)
+				}
+				return
+			}
+			fmt.Fprintf(os.Stderr, "tui: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	cmd := os.Args[1]
