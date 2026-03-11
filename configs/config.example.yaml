@@ -1,0 +1,27 @@
+# Example agent/launcher config (compatible with internal/config.Config)
+# Copy to ~/.config/ai-launcher/config.yaml or use as reference.
+
+api_key: ""
+
+mcp_registry: "https://gitlab.example.com/api/v4/projects/123/packages/npm"
+
+tools:
+  - id: tool-1
+    name: Example Tool
+    command: "node /path/to/agent.js"
+    model: "claude-3"
+    env: {}
+    enabled: true
+    favorite: false
+  - id: tool-2
+    name: Another Tool
+    command: "python -m my_agent"
+    model: "gpt-4"
+    env:
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+    enabled: true
+    favorite: true
+
+telemetry:
+  enabled: false
+  otlp_endpoint: ""
