@@ -3,6 +3,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -98,9 +99,35 @@ func viewMainScreen(m Model) tea.View {
 }
 
 func viewTokenScreen(m Model) tea.View {
-	// Placeholder; next commit will add Lip Gloss layout
-	s := "  API TOKEN (placeholder)\n"
-	return tea.NewView(s)
+	body := BodyStyle.Render("Enter your API token to continue:")
+	body += "\n\n  "
+	// Input line: mask with * (FR-102), min width 40
+	mask := strings.Repeat("*", len(m.TokenInput))
+	if mask == "" {
+		mask = " "
+	}
+	fieldWidth := 40
+	if len(mask) < fieldWidth {
+		mask += strings.Repeat(" ", fieldWidth-len(mask))
+	} else {
+		mask = mask[:fieldWidth]
+	}
+	body += HighlightStyle.Render(" "+mask+" ") + "\n\n  "
+	// Buttons [ OK ] [ Cancel ]
+	okBtn := ButtonStyle.Render("[ OK ]")
+	cancelBtn := ButtonStyle.Render("[ Cancel ]")
+	if m.TokenButtonFoc == TokenButtonOK {
+		okBtn = ButtonActiveStyle.Render("[ OK ]")
+	} else {
+		cancelBtn = ButtonActiveStyle.Render("[ Cancel ]")
+	}
+	body += okBtn + "  " + cancelBtn + "\n"
+	if m.TokenError != "" {
+		body += "\n  " + ErrorStyle.Render(m.TokenError) + "\n"
+	}
+	body += "\n" + FooterStyle.Render("F1 Help                              F10 Exit")
+	rendered := FrameWithTitle("  API TOKEN  ", body)
+	return tea.NewView(rendered)
 }
 
 func updateMainScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
