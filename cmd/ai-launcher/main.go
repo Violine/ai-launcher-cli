@@ -33,7 +33,7 @@ func main() {
 		if repo == "" {
 			repo = updater.DefaultRepo
 		}
-		latest, err := updater.LatestRelease(repo)
+		latest, err := updater.LatestRelease(context.Background(), repo)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "check-update: %v\n", err)
 			os.Exit(1)
@@ -55,11 +55,6 @@ func main() {
 		return
 	}
 
-	// FR-601: check for updates in background at startup (non-blocking)
-	go updater.CheckInBackground(autoupdate.Version, cfg.UpdateRepo, func(available string) {
-		fmt.Fprintf(os.Stderr, "Update available: %s (current: %s). Run 'ai-launcher autoupdate' to install.\n", available, autoupdate.Version)
-	})
-
 	plugins := []plugin.Plugin{
 		configgen.New(),
 		mcpupdate.New(),
@@ -70,13 +65,11 @@ func main() {
 	for _, p := range plugins {
 		byName[p.Name()] = p
 	}
-
-	// Display names for TUI menu (same order as plugins). Prefix: [TODO] — not implemented, [Скоро] — in progress.
 	menuLabels := []string{
 		"[TODO] Generate config (Claude/OpenCode)",
 		"[TODO] Update MCP packages",
 		"[TODO] Run AI agent",
-		"[Скоро] AI Launcher Update",
+		"AI Launcher Update",
 	}
 
 	// No args: start TUI (agreed default)
@@ -85,7 +78,15 @@ func main() {
 		for i, p := range plugins {
 			commandNames[i] = p.Name()
 		}
-		prog := tea.NewProgram(tui.NewModel(cfg, menuLabels, commandNames))
+		prog := tea.NewProgram(tui.NewModel(cfg, menuLabels, commandNames, autoupdate.Version))
+		// FR-601: check for updates in background; send result into TUI (no stderr message)
+		go updater.CheckInBackground(autoupdate.Version, cfg.UpdateRepo, func(available string) {
+			prog.Send(tui.UpdateAvailableMsg{Version: available})
+		}, func(err error) {
+			if err != nil {
+				prog.Send(tui.UpdateCheckErrorMsg{Err: err})
+			}
+		})
 		finalModel, err := prog.Run()
 		if err != nil {
 			// No TTY (e.g. pipe, IDE): show usage and exit 0 instead of failing
@@ -100,9 +101,12 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tui: %v\n", err)
 			os.Exit(1)
 		}
-		// If user selected a command with Enter, run it
+		// If user selected a command with Enter, run it (except autoupdate — handled fully in TUI)
 		if tuiModel, ok := finalModel.(tui.Model); ok && tuiModel.RunCommandIndex >= 0 && tuiModel.RunCommandIndex < len(tuiModel.CommandNames) {
 			cmdName := tuiModel.CommandNames[tuiModel.RunCommandIndex]
+			if cmdName == "autoupdate" {
+				return
+			}
 			plug := byName[cmdName]
 			ctx := context.WithValue(context.Background(), plugin.ConfigKey, cfg)
 			if err := plug.Run(ctx); err != nil {

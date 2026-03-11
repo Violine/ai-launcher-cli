@@ -91,17 +91,29 @@ var (
 			Bold(true)
 	HelpDescStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColorText))
+
+	// Version under the title: not bold, dimmer (visually smaller)
+	VersionStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#AAAAAA")).
+			Bold(false)
 )
 
 // FrameWithTitle renders a bordered block with title (for token/main/help screens).
 // width is the content area width (e.g. from Model.ContentWidth()); if <= 0, FrameWidth is used.
 func FrameWithTitle(title, body string, width int) string {
+	return FrameWithTitleSubtitle(title, "", body, width)
+}
+
+// FrameWithTitleSubtitle renders title, optional subtitle (e.g. version) directly under it, then the bordered body.
+func FrameWithTitleSubtitle(title, subtitle, body string, width int) string {
 	if width <= 0 {
 		width = FrameWidth
 	}
 	titleRendered := TitleStyle.Render(title)
-	contentStyle := ContentBoxStyle.Copy().Width(width).MaxWidth(width)
-	bodyBoxed := contentStyle.Render(body)
-	inner := BorderStyle.Render(bodyBoxed)
-	return RootStyle.Render(lipgloss.JoinVertical(lipgloss.Left, titleRendered, "", inner))
+	blocks := []string{titleRendered}
+	if subtitle != "" {
+		blocks = append(blocks, VersionStyle.Render(subtitle))
+	}
+	blocks = append(blocks, "", BorderStyle.Render(ContentBoxStyle.Copy().Width(width).MaxWidth(width).Render(body)))
+	return RootStyle.Render(lipgloss.JoinVertical(lipgloss.Left, blocks...))
 }
