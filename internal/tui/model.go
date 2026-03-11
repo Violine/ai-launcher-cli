@@ -2,7 +2,6 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -89,13 +88,14 @@ func (m Model) View() tea.View {
 }
 
 func viewMainScreen(m Model) tea.View {
-	s := "  AI Launcher\n\n"
-	s += "  Commands:\n"
+	body := BodyStyle.Render("Commands:")
+	body += "\n\n"
 	for _, name := range m.Commands {
-		s += fmt.Sprintf("    %s\n", name)
+		body += "  " + BodyStyle.Render(name) + "\n"
 	}
-	s += "\n  Press q to quit.\n"
-	return tea.NewView(s)
+	body += "\n" + FooterStyle.Render("F7 Token  F10 Exit")
+	rendered := FrameWithTitle("  AI LAUNCHER  ", body)
+	return tea.NewView(rendered)
 }
 
 func viewTokenScreen(m Model) tea.View {
