@@ -3,8 +3,10 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -81,4 +83,17 @@ func Save(c *Config) error {
 		return err
 	}
 	return os.WriteFile(path, data, 0600)
+}
+
+// ValidateAPIKey проверяет формат API-ключа перед сохранением (FR-103).
+// Ключ не должен быть пустым после trim и должен иметь минимальную длину.
+func ValidateAPIKey(s string) error {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return errors.New("API key is required")
+	}
+	if len(s) < 10 {
+		return errors.New("API key is too short")
+	}
+	return nil
 }
