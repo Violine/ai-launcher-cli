@@ -21,8 +21,11 @@ const (
 // CheckInBackground проверяет обновления (FR-601). Вызывать из main в горутине.
 // Если доступна версия новее currentVersion, вызывается onNewVersion(available).
 // При ошибке сети или парсинга версий просто выходит без вызова.
-func CheckInBackground(currentVersion string, onNewVersion func(available string)) {
-	latest, err := LatestRelease("")
+func CheckInBackground(currentVersion, repo string, onNewVersion func(available string)) {
+	if repo == "" {
+		repo = DefaultRepo
+	}
+	latest, err := LatestRelease(repo)
 	if err != nil {
 		return
 	}

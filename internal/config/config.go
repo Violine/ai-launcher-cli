@@ -14,6 +14,7 @@ import (
 // Config — основная структура конфигурации.
 type Config struct {
 	APIKey       string            `yaml:"api_key,omitempty"`
+	UpdateRepo   string            `yaml:"update_repo,omitempty"`   // GitHub/GitLab repo для проверки обновлений (owner/repo)
 	Tools        []ToolEntry       `yaml:"tools,omitempty"`
 	Telemetry    TelemetryConfig   `yaml:"telemetry,omitempty"`
 	MCPRegistry  string            `yaml:"mcp_registry,omitempty"` // URL GitLab npm registry для MCP

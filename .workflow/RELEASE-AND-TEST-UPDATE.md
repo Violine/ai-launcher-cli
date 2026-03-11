@@ -3,7 +3,26 @@
 **Целевой источник обновлений в проде:** GitLab (Releases / API).  
 **Для тестов и отладки:** GitHub Releases — проще создать репозиторий, тег и релиз без корпоративного GitLab.
 
-Ниже — как собрать бинарь с версией, выложить его на GitHub и проверить сценарий обновления.
+---
+
+## 0. Опубликовать проект на GitHub
+
+1. Создайте репозиторий на GitHub (например, `yourname/ai-launcher-cli`). Не инициализируйте его README/gitignore — репозиторий должен быть пустым.
+2. В каталоге проекта выполните (подставьте свой URL):
+
+```bash
+git remote add origin https://github.com/YOUR_USERNAME/ai-launcher-cli.git
+git push -u origin master
+```
+
+Либо через SSH: `git remote add origin git@github.com:YOUR_USERNAME/ai-launcher-cli.git`
+
+3. Чтобы проверять обновления против этого репозитория, в `~/.config/ai-launcher/config.yaml` укажите:
+   ```yaml
+   update_repo: "YOUR_USERNAME/ai-launcher-cli"
+   ```
+
+Далее — сборка с версией, создание релиза и проверка обновления по шагам ниже.
 
 ---
 

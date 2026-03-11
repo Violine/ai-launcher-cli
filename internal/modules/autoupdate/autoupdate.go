@@ -4,6 +4,7 @@ package autoupdate
 import (
 	"context"
 
+	"github.com/ai-launcher/cli/internal/config"
 	"github.com/ai-launcher/cli/internal/updater"
 	"github.com/ai-launcher/cli/pkg/plugin"
 )
@@ -20,10 +21,13 @@ func (Plugin) Name() string {
 }
 
 // Run checks for updates. Used when user runs "ai-launcher autoupdate".
-// For FR-601 (check at startup in background), main starts a goroutine that calls updater.CheckInBackground.
+// Repo for check is taken from config (update_repo) if present.
 func (Plugin) Run(ctx context.Context) error {
-	_ = ctx
-	updater.CheckInBackground(Version, nil)
+	repo := ""
+	if c, ok := ctx.Value(plugin.ConfigKey).(*config.Config); ok && c != nil {
+		repo = c.UpdateRepo
+	}
+	updater.CheckInBackground(Version, repo, nil)
 	return nil
 }
 

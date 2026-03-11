@@ -27,8 +27,36 @@ func main() {
 		os.Exit(1)
 	}
 
+	// FR-607: explicit check for updates (stdout, then exit)
+	if len(os.Args) >= 2 && (os.Args[1] == "--check-update" || os.Args[1] == "-c") {
+		repo := cfg.UpdateRepo
+		if repo == "" {
+			repo = updater.DefaultRepo
+		}
+		latest, err := updater.LatestRelease(repo)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "check-update: %v\n", err)
+			os.Exit(1)
+		}
+		if latest == "" {
+			fmt.Printf("No release found for %s\n", repo)
+			return
+		}
+		newer, err := updater.NewerThan(autoupdate.Version, latest)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "check-update: %v\n", err)
+			os.Exit(1)
+		}
+		if newer {
+			fmt.Printf("Update available: %s (current: %s)\n", latest, autoupdate.Version)
+		} else {
+			fmt.Printf("Current version is up to date: %s\n", autoupdate.Version)
+		}
+		return
+	}
+
 	// FR-601: check for updates in background at startup (non-blocking)
-	go updater.CheckInBackground(autoupdate.Version, func(available string) {
+	go updater.CheckInBackground(autoupdate.Version, cfg.UpdateRepo, func(available string) {
 		fmt.Fprintf(os.Stderr, "Update available: %s (current: %s). Run 'ai-launcher autoupdate' to install.\n", available, autoupdate.Version)
 	})
 
