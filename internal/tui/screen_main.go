@@ -2,8 +2,10 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/ai-launcher/cli/internal/updater"
 )
@@ -13,12 +15,17 @@ func viewMainScreen(m Model) tea.View {
 	if versionStr == "" {
 		versionStr = "0.0.0"
 	}
+	contentWidth := m.ContentWidth()
 	body := SectionStyle.Render("Commands:")
+	if pad := contentWidth - lipgloss.Width(body); pad > 0 {
+		body += SectionStyle.Render(strings.Repeat(" ", pad))
+	}
 	body += "\n\n"
 	sel := m.SelectedIndex
 	for i, label := range m.Commands {
 		num := fmt.Sprintf("%d.", i+1)
-		line := "  " + BodyStyle.Render(num) + " "
+		// Префикс "  1. " целиком в синем фоне, чтобы не было чёрных полос между цифрой и текстом
+		line := BodyStyle.Render("  " + num + " ")
 		displayLabel := label
 		if i < len(m.CommandNames) && m.CommandNames[i] == "autoupdate" && m.AvailableVersion != "" {
 			displayLabel = label + "  " + HelpKeyStyle.Render("— доступно обновление до "+m.AvailableVersion)
@@ -28,9 +35,21 @@ func viewMainScreen(m Model) tea.View {
 		} else {
 			line += BodyStyle.Render(displayLabel)
 		}
+		// Добиваем строку до полной ширины синим фоном, чтобы справа не было чёрного
+		if pad := contentWidth - lipgloss.Width(line); pad > 0 {
+			line += BodyStyle.Render(strings.Repeat(" ", pad))
+		}
 		body += line + "\n"
 	}
-	body += "\n" + FooterStyle.Render(fmt.Sprintf("↑/↓ or 1-%d: select   Enter: run   F1 Help   F7 Token   F10 Exit", len(m.Commands)))
+	footerStr := fmt.Sprintf("↑/↓ or 1-%d: select   Enter: run   F1 Help   F7 Token   F10 Exit", len(m.Commands))
+	pad := contentWidth - lipgloss.Width(footerStr)
+	if pad < 0 {
+		pad = 0
+	}
+	// Вся строка футера одним рендером — синий фон до конца, без чёрных клеток после "F10 Exit"
+	footerLine := FooterStyle.Render(footerStr + strings.Repeat(" ", pad))
+	body += "\n" + footerLine
+	body += "\n" + FooterStyle.Render(strings.Repeat(" ", contentWidth))
 	rendered := FrameWithTitleSubtitle("  AI LAUNCHER  ", "  v "+versionStr, body, m.ContentWidth())
 	return tea.NewView(rendered)
 }

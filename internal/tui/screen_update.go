@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/ai-launcher/cli/internal/updater"
 )
@@ -58,21 +60,37 @@ func runInstallCmd(repo, version string) tea.Cmd {
 }
 
 func viewUpdateConfirmScreen(m Model) tea.View {
+	contentWidth := m.ContentWidth()
 	current := m.CurrentVersion
 	if current == "" {
 		current = "0.0.0"
 	}
 	body := BodyStyle.Render(fmt.Sprintf("Доступна версия %s (текущая: %s). Установить?", m.AvailableVersion, current))
-	body += "\n\n  "
-	noBtn := ButtonStyle.Render("[ N ] Нет")
-	yesBtn := ButtonStyle.Render("[ Y ] Да")
-	if m.UpdateState.ConfirmButtonFoc == UpdateButtonNo {
-		noBtn = ButtonActiveStyle.Render("[ N ] Нет")
-	} else {
-		yesBtn = ButtonActiveStyle.Render("[ Y ] Да")
+	if pad := contentWidth - lipgloss.Width(body); pad > 0 {
+		body += BodyStyle.Render(strings.Repeat(" ", pad))
 	}
-	body += noBtn + "  " + yesBtn + "\n"
-	body += "\n" + FooterStyle.Render("Tab: переключить   Enter: подтвердить   Esc: отмена")
+	body += "\n\n" + BodyStyle.Render("  ")
+	yesBtn := ButtonStyle.Render("[ Y ] Да")
+	noBtn := ButtonStyle.Render("[ N ] Нет")
+	if m.UpdateState.ConfirmButtonFoc == UpdateButtonYes {
+		yesBtn = ButtonActiveStyle.Render("[ Y ] Да")
+	} else {
+		noBtn = ButtonActiveStyle.Render("[ N ] Нет")
+	}
+	// Пробел между кнопками — синий фон, чтобы не было чёрной полосы
+	body += yesBtn + BodyStyle.Render("  ") + noBtn
+	if pad := contentWidth - lipgloss.Width(body); pad > 0 {
+		body += BodyStyle.Render(strings.Repeat(" ", pad))
+	}
+	body += "\n"
+	footerStr := "Tab: переключить   Enter: подтвердить   Esc: отмена"
+	pad := contentWidth - lipgloss.Width(footerStr)
+	if pad < 0 {
+		pad = 0
+	}
+	// Вся строка футера одним рендером — синий фон до конца
+	footerLine := FooterStyle.Render(footerStr + strings.Repeat(" ", pad))
+	body += footerLine + "\n" + FooterStyle.Render(strings.Repeat(" ", m.ContentWidth()))
 	rendered := FrameWithTitle("  ОБНОВЛЕНИЕ  ", body, m.ContentWidth())
 	return tea.NewView(rendered)
 }
@@ -118,9 +136,17 @@ func updateUpdateConfirmScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func viewUpdateCheckErrorScreen(m Model) tea.View {
+	contentWidth := m.ContentWidth()
 	body := BodyStyle.Render("Не удалось проверить обновления:")
-	body += "\n\n  " + ErrorStyle.Render(m.UpdateState.CheckError)
-	body += "\n\n  "
+	if pad := contentWidth - lipgloss.Width(body); pad > 0 {
+		body += BodyStyle.Render(strings.Repeat(" ", pad))
+	}
+	body += "\n\n"
+	line2 := BodyStyle.Render("  ") + ErrorStyle.Render(m.UpdateState.CheckError)
+	if pad := contentWidth - lipgloss.Width(line2); pad > 0 {
+		line2 += BodyStyle.Render(strings.Repeat(" ", pad))
+	}
+	body += line2 + "\n\n" + BodyStyle.Render("  ")
 	retryBtn := ButtonStyle.Render("[ Retry ]")
 	cancelBtn := ButtonStyle.Render("[ Cancel ]")
 	if m.UpdateState.ErrorButtonFoc == 0 {
@@ -128,9 +154,18 @@ func viewUpdateCheckErrorScreen(m Model) tea.View {
 	} else {
 		cancelBtn = ButtonActiveStyle.Render("[ Cancel ]")
 	}
-	body += retryBtn + "  " + cancelBtn
-	body += "\n\n" + FooterStyle.Render("Tab / ←→: переключить   Enter: подтвердить   Esc: в меню")
-	rendered := FrameWithTitle("  Ошибка проверки  ", body, m.ContentWidth())
+	line3 := retryBtn + BodyStyle.Render("  ") + cancelBtn
+	if pad := contentWidth - lipgloss.Width(line3); pad > 0 {
+		line3 += BodyStyle.Render(strings.Repeat(" ", pad))
+	}
+	body += line3 + "\n\n"
+	footerStr := "Tab / ←→: переключить   Enter: подтвердить   Esc: в меню"
+	pad := contentWidth - lipgloss.Width(footerStr)
+	if pad < 0 {
+		pad = 0
+	}
+	body += FooterStyle.Render(footerStr+strings.Repeat(" ", pad)) + "\n" + FooterStyle.Render(strings.Repeat(" ", contentWidth))
+	rendered := FrameWithTitle("  Ошибка проверки  ", body, contentWidth)
 	return tea.NewView(rendered)
 }
 
@@ -169,9 +204,17 @@ func updateUpdateCheckErrorScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func viewUpdateInstallErrorScreen(m Model) tea.View {
+	contentWidth := m.ContentWidth()
 	body := BodyStyle.Render("Ошибка при установке:")
-	body += "\n\n  " + ErrorStyle.Render(m.UpdateState.InstallError)
-	body += "\n\n  "
+	if pad := contentWidth - lipgloss.Width(body); pad > 0 {
+		body += BodyStyle.Render(strings.Repeat(" ", pad))
+	}
+	body += "\n\n"
+	line2 := BodyStyle.Render("  ") + ErrorStyle.Render(m.UpdateState.InstallError)
+	if pad := contentWidth - lipgloss.Width(line2); pad > 0 {
+		line2 += BodyStyle.Render(strings.Repeat(" ", pad))
+	}
+	body += line2 + "\n\n" + BodyStyle.Render("  ")
 	retryBtn := ButtonStyle.Render("[ Retry ]")
 	cancelBtn := ButtonStyle.Render("[ Cancel ]")
 	if m.UpdateState.ErrorButtonFoc == 0 {
@@ -179,9 +222,18 @@ func viewUpdateInstallErrorScreen(m Model) tea.View {
 	} else {
 		cancelBtn = ButtonActiveStyle.Render("[ Cancel ]")
 	}
-	body += retryBtn + "  " + cancelBtn
-	body += "\n\n" + FooterStyle.Render("Tab / ←→: переключить   Enter: подтвердить   Esc: в меню")
-	rendered := FrameWithTitle("  Ошибка установки  ", body, m.ContentWidth())
+	line3 := retryBtn + BodyStyle.Render("  ") + cancelBtn
+	if pad := contentWidth - lipgloss.Width(line3); pad > 0 {
+		line3 += BodyStyle.Render(strings.Repeat(" ", pad))
+	}
+	body += line3 + "\n\n"
+	footerStr := "Tab / ←→: переключить   Enter: подтвердить   Esc: в меню"
+	pad := contentWidth - lipgloss.Width(footerStr)
+	if pad < 0 {
+		pad = 0
+	}
+	body += FooterStyle.Render(footerStr+strings.Repeat(" ", pad)) + "\n" + FooterStyle.Render(strings.Repeat(" ", contentWidth))
+	rendered := FrameWithTitle("  Ошибка установки  ", body, contentWidth)
 	return tea.NewView(rendered)
 }
 
@@ -220,10 +272,24 @@ func updateUpdateInstallErrorScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func viewUpdateSuccessScreen(m Model) tea.View {
+	contentWidth := m.ContentWidth()
 	body := BodyStyle.Render("Обновление установлено.")
-	body += "\n\n  " + BodyStyle.Render("Перезапустите приложение для использования новой версии.")
-	body += "\n\n" + FooterStyle.Render("Нажмите Enter для выхода")
-	rendered := FrameWithTitle("  Установлено  ", body, m.ContentWidth())
+	if pad := contentWidth - lipgloss.Width(body); pad > 0 {
+		body += BodyStyle.Render(strings.Repeat(" ", pad))
+	}
+	body += "\n\n"
+	line2 := BodyStyle.Render("  ") + BodyStyle.Render("Перезапустите приложение для использования новой версии.")
+	if pad := contentWidth - lipgloss.Width(line2); pad > 0 {
+		line2 += BodyStyle.Render(strings.Repeat(" ", pad))
+	}
+	body += line2 + "\n\n"
+	footerStr := "Нажмите Enter для выхода"
+	pad := contentWidth - lipgloss.Width(footerStr)
+	if pad < 0 {
+		pad = 0
+	}
+	body += FooterStyle.Render(footerStr+strings.Repeat(" ", pad)) + "\n" + FooterStyle.Render(strings.Repeat(" ", contentWidth))
+	rendered := FrameWithTitle("  Установлено  ", body, contentWidth)
 	return tea.NewView(rendered)
 }
 

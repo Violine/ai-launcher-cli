@@ -5,9 +5,11 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func viewProgressScreen(m Model) tea.View {
+	contentWidth := m.ContentWidth()
 	title := m.Progress.Title
 	if title == "" {
 		title = "LOADING"
@@ -18,7 +20,11 @@ func viewProgressScreen(m Model) tea.View {
 	} else if m.Progress.Title != "" {
 		desc = m.Progress.Title
 	}
-	body := BodyStyle.Render(desc) + "\n\n  "
+	body := BodyStyle.Render(desc)
+	if pad := contentWidth - lipgloss.Width(body); pad > 0 {
+		body += BodyStyle.Render(strings.Repeat(" ", pad))
+	}
+	body += "\n\n" + BodyStyle.Render("  ")
 	barWidth := 40
 	if m.Progress.Percent >= 0 && m.Progress.Percent <= 100 {
 		filled := m.Progress.Percent * barWidth / 100
@@ -26,15 +32,37 @@ func viewProgressScreen(m Model) tea.View {
 			filled = barWidth
 		}
 		bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
-		body += HighlightStyle.Render(bar) + "\n\n  "
-		body += BodyStyle.Render(fmt.Sprintf("%d%%", m.Progress.Percent))
+		line2 := BodyStyle.Render("  ") + HighlightStyle.Render(bar)
+		if pad := contentWidth - lipgloss.Width(line2); pad > 0 {
+			line2 += BodyStyle.Render(strings.Repeat(" ", pad))
+		}
+		body += line2 + "\n\n" + BodyStyle.Render("  ")
+		line3 := BodyStyle.Render(fmt.Sprintf("%d%%", m.Progress.Percent))
+		if pad := contentWidth - lipgloss.Width(line3); pad > 0 {
+			line3 += BodyStyle.Render(strings.Repeat(" ", pad))
+		}
+		body += line3
 	} else {
 		bar := strings.Repeat("░", barWidth)
-		body += BodyStyle.Render(bar) + "\n\n  "
-		body += BodyStyle.Render("Please wait...")
+		line2 := BodyStyle.Render("  ") + BodyStyle.Render(bar)
+		if pad := contentWidth - lipgloss.Width(line2); pad > 0 {
+			line2 += BodyStyle.Render(strings.Repeat(" ", pad))
+		}
+		body += line2 + "\n\n" + BodyStyle.Render("  ")
+		line3 := BodyStyle.Render("Please wait...")
+		if pad := contentWidth - lipgloss.Width(line3); pad > 0 {
+			line3 += BodyStyle.Render(strings.Repeat(" ", pad))
+		}
+		body += line3
 	}
-	body += "\n\n" + FooterStyle.Render("")
-	rendered := FrameWithTitle("  "+title+"  ", body, m.ContentWidth())
+	body += "\n\n"
+	footerStr := ""
+	pad := contentWidth - lipgloss.Width(footerStr)
+	if pad < 0 {
+		pad = 0
+	}
+	body += FooterStyle.Render(footerStr+strings.Repeat(" ", pad)) + "\n" + FooterStyle.Render(strings.Repeat(" ", contentWidth))
+	rendered := FrameWithTitle("  "+title+"  ", body, contentWidth)
 	return tea.NewView(rendered)
 }
 

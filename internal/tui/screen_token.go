@@ -4,14 +4,16 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/ai-launcher/cli/internal/config"
 )
 
 func viewTokenScreen(m Model) tea.View {
+	contentWidth := m.ContentWidth()
 	body := BodyStyle.Render("Enter your API token to continue:")
-	body += "\n\n  "
-	fieldWidth := m.ContentWidth() - 6
+	body += "\n\n" + BodyStyle.Render("  ")
+	fieldWidth := contentWidth - 6
 	if fieldWidth < 20 {
 		fieldWidth = 20
 	}
@@ -24,7 +26,7 @@ func viewTokenScreen(m Model) tea.View {
 	if len(content) < fieldWidth {
 		body += BodyStyle.Render(strings.Repeat(" ", fieldWidth-len(content)))
 	}
-	body += "\n\n  "
+	body += "\n\n" + BodyStyle.Render("  ")
 	okBtn := ButtonStyle.Render("[ OK ]")
 	cancelBtn := ButtonStyle.Render("[ Cancel ]")
 	if m.Token.ButtonFoc == TokenButtonOK {
@@ -32,12 +34,17 @@ func viewTokenScreen(m Model) tea.View {
 	} else {
 		cancelBtn = ButtonActiveStyle.Render("[ Cancel ]")
 	}
-	body += okBtn + "  " + cancelBtn + "\n"
+	body += okBtn + BodyStyle.Render("  ") + cancelBtn + "\n"
 	if m.Token.Error != "" {
-		body += "\n  " + ErrorStyle.Render(m.Token.Error) + "\n"
+		body += "\n" + BodyStyle.Render("  ") + ErrorStyle.Render(m.Token.Error) + "\n"
 	}
-	body += "\n" + FooterStyle.Render("F1 Help   Tab: switch button   Enter: confirm   Esc: back   F10 Exit")
-	rendered := FrameWithTitle("  API TOKEN  ", body, m.ContentWidth())
+	footerStr := "F1 Help   Tab: switch button   Enter: confirm   Esc: back   F10 Exit"
+	pad := contentWidth - lipgloss.Width(footerStr)
+	if pad < 0 {
+		pad = 0
+	}
+	body += "\n" + FooterStyle.Render(footerStr+strings.Repeat(" ", pad)) + "\n" + FooterStyle.Render(strings.Repeat(" ", contentWidth))
+	rendered := FrameWithTitle("  API TOKEN  ", body, contentWidth)
 	return tea.NewView(rendered)
 }
 

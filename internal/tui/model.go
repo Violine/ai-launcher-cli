@@ -111,7 +111,7 @@ func NewModel(cfg *config.Config, menuLabels []string, commandNames []string, cu
 		RunCommandIndex:  -1,
 		CurrentVersion:   currentVersion,
 		Token:            TokenScreenState{ButtonFoc: TokenButtonOK},
-		UpdateState:      UpdateScreenState{ConfirmButtonFoc: UpdateButtonNo},
+		UpdateState:      UpdateScreenState{ConfirmButtonFoc: UpdateButtonYes},
 	}
 	if cfg == nil || cfg.APIKey == "" {
 		m.ScreenStack = []Screen{ScreenToken}
