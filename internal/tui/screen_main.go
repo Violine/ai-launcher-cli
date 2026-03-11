@@ -44,12 +44,12 @@ func updateMainScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "f7":
-			m.Screen = ScreenToken
 			m.Token.Input = ""
 			m.Token.Error = ""
 			if m.Config != nil {
 				m.Config.APIKey = ""
 			}
+			m = PushScreen(m, ScreenToken)
 			return m, nil
 		case "up", "k":
 			m.SelectedIndex--
@@ -73,17 +73,17 @@ func updateMainScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			idx := m.SelectedIndex
 			if idx >= 0 && idx < len(m.CommandNames) && m.CommandNames[idx] == "autoupdate" {
 				if m.AvailableVersion != "" {
-					m.Screen = ScreenUpdateConfirm
+					m = PushScreen(m, ScreenUpdateConfirm)
 					return m, nil
 				}
 				repo := updater.DefaultRepo
 				if m.Config != nil && m.Config.UpdateRepo != "" {
 					repo = m.Config.UpdateRepo
 				}
-				m.Screen = ScreenUpdateChecking
 				m.Progress.Title = "Проверка обновлений"
 				m.Progress.Status = "Проверка обновлений..."
 				m.Progress.Percent = -1
+				m = PushScreen(m, ScreenUpdateChecking)
 				return m, runCheckUpdateCmd(repo, m.CurrentVersion)
 			}
 			m.RunCommandIndex = m.SelectedIndex

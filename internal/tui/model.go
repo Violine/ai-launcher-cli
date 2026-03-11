@@ -7,7 +7,7 @@ import (
 	"github.com/ai-launcher/cli/internal/config"
 )
 
-// Screen is the current TUI screen.
+// Screen is a TUI screen identifier.
 type Screen int
 
 const (
@@ -83,14 +83,13 @@ type UpdateScreenState struct {
 
 // Model holds the TUI state.
 type Model struct {
-	Screen   Screen
-	Config   *config.Config
-	Commands []string
+	ScreenStack []Screen
+	Config      *config.Config
+	Commands    []string
 	CommandNames []string
 
 	SelectedIndex   int
 	RunCommandIndex int
-	PrevScreen      Screen
 
 	Width  int
 	Height int
@@ -98,8 +97,8 @@ type Model struct {
 	AvailableVersion string
 	CurrentVersion   string
 
-	Token    TokenScreenState
-	Progress ProgressState
+	Token       TokenScreenState
+	Progress    ProgressState
 	UpdateState UpdateScreenState
 }
 
@@ -112,12 +111,12 @@ func NewModel(cfg *config.Config, menuLabels []string, commandNames []string, cu
 		RunCommandIndex:  -1,
 		CurrentVersion:   currentVersion,
 		Token:            TokenScreenState{ButtonFoc: TokenButtonOK},
-		UpdateState: UpdateScreenState{ConfirmButtonFoc: UpdateButtonNo},
+		UpdateState:      UpdateScreenState{ConfirmButtonFoc: UpdateButtonNo},
 	}
 	if cfg == nil || cfg.APIKey == "" {
-		m.Screen = ScreenToken
+		m.ScreenStack = []Screen{ScreenToken}
 	} else {
-		m.Screen = ScreenMain
+		m.ScreenStack = []Screen{ScreenMain}
 	}
 	return m
 }
@@ -143,6 +142,46 @@ func (m Model) ContentWidth() int {
 	return w
 }
 
+// CurrentScreen returns the top of the screen stack, or ScreenMain if stack is empty.
+func (m Model) CurrentScreen() Screen {
+	if len(m.ScreenStack) == 0 {
+		return ScreenMain
+	}
+	return m.ScreenStack[len(m.ScreenStack)-1]
+}
+
+// PushScreen returns a copy of m with s pushed onto the screen stack.
+func PushScreen(m Model, s Screen) Model {
+	newStack := make([]Screen, len(m.ScreenStack)+1)
+	copy(newStack, m.ScreenStack)
+	newStack[len(newStack)-1] = s
+	m.ScreenStack = newStack
+	return m
+}
+
+// PopScreen returns a copy of m with the top screen popped; no-op if stack has at most one element.
+func PopScreen(m Model) Model {
+	if len(m.ScreenStack) <= 1 {
+		return m
+	}
+	newStack := make([]Screen, len(m.ScreenStack)-1)
+	copy(newStack, m.ScreenStack[:len(m.ScreenStack)-1])
+	m.ScreenStack = newStack
+	return m
+}
+
+// ReplaceScreen returns a copy of m with the top of the stack replaced by s; no-op if stack is empty.
+func ReplaceScreen(m Model, s Screen) Model {
+	if len(m.ScreenStack) == 0 {
+		return m
+	}
+	newStack := make([]Screen, len(m.ScreenStack))
+	copy(newStack, m.ScreenStack)
+	newStack[len(newStack)-1] = s
+	m.ScreenStack = newStack
+	return m
+}
+
 // Init runs once at startup.
 func (m Model) Init() tea.Cmd {
 	return nil
@@ -160,28 +199,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Err != nil {
 			m.UpdateState.CheckError = msg.Err.Error()
 		}
-		m.Screen = ScreenUpdateCheckError
+		m = PushScreen(m, ScreenUpdateCheckError)
 		return m, nil
 	case UpdateCheckResultMsg:
-		m.Screen = ScreenMain
 		if msg.Err != nil {
 			m.UpdateState.CheckError = msg.Err.Error()
-			m.Screen = ScreenUpdateCheckError
+			m = ReplaceScreen(m, ScreenUpdateCheckError)
 			return m, nil
 		}
 		if msg.Available != "" {
 			m.AvailableVersion = msg.Available
-			m.Screen = ScreenUpdateConfirm
+			m = ReplaceScreen(m, ScreenUpdateConfirm)
+			return m, nil
 		}
+		m = PopScreen(m)
 		return m, nil
 	case InstallDoneMsg:
 		if msg.Err != nil {
 			m.UpdateState.InstallError = msg.Err.Error()
 			m.UpdateState.ErrorButtonFoc = 0
-			m.Screen = ScreenUpdateInstallError
+			m = ReplaceScreen(m, ScreenUpdateInstallError)
 			return m, nil
 		}
-		m.Screen = ScreenUpdateSuccess
+		m = ReplaceScreen(m, ScreenUpdateSuccess)
 		return m, nil
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
@@ -192,16 +232,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c", "f10":
 			return m, tea.Quit
 		case "f1":
-			if m.Screen == ScreenHelp {
-				m.Screen = m.PrevScreen
+			if m.CurrentScreen() == ScreenHelp {
+				m = PopScreen(m)
 				return m, nil
 			}
-			m.PrevScreen = m.Screen
-			m.Screen = ScreenHelp
+			m = PushScreen(m, ScreenHelp)
 			return m, nil
 		}
 	}
-	switch m.Screen {
+	switch m.CurrentScreen() {
 	case ScreenHelp:
 		return updateHelpScreen(m, msg)
 	case ScreenToken:
@@ -225,7 +264,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the UI and delegates to screen-specific view.
 func (m Model) View() tea.View {
-	switch m.Screen {
+	switch m.CurrentScreen() {
 	case ScreenHelp:
 		return viewHelpScreen(m)
 	case ScreenToken:

@@ -62,14 +62,14 @@ func updateTokenScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				m.Config = cfg
-				m.Screen = ScreenMain
 				m.Token.Error = ""
 				m.Token.Input = ""
+				m = PopScreen(m)
 				return m, nil
 			}
-			m.Screen = ScreenMain
 			m.Token.Error = ""
 			m.Token.Input = ""
+			m = PopScreen(m)
 			return m, nil
 		case "tab", "right":
 			m.Token.ButtonFoc = TokenButtonCancel
@@ -80,9 +80,9 @@ func updateTokenScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Token.Error = ""
 			return m, nil
 		case "esc":
-			m.Screen = ScreenMain
 			m.Token.Error = ""
 			m.Token.Input = ""
+			m = PopScreen(m)
 			return m, nil
 		case "backspace":
 			if len(m.Token.Input) > 0 {

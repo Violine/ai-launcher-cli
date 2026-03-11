@@ -36,7 +36,7 @@ func updateHelpScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "f1", "esc":
-			m.Screen = m.PrevScreen
+			m = PopScreen(m)
 			return m, nil
 		}
 	}

@@ -123,15 +123,140 @@ ai-launcher-cli/
 │   │   ├── mcpupdate/      # обновление MCP через GitLab
 │   │   ├── agentrun/       # запуск AI-агентов (exec)
 │   │   └── autoupdate/     # проверка обновлений (вызов internal/updater)
-│   └── tui/                # TUI (Bubble Tea + Lip Gloss) — заглушка
+│   └── tui/                # TUI (Bubble Tea + Lip Gloss)
+│       ├── model.go        # Model, ScreenStack, PushScreen/PopScreen/ReplaceScreen, Update/View
+│       ├── styles.go       # стили (FrameWithTitle, кнопки, цвета по спецификации 5.1)
+│       ├── screen_main.go  # главное меню (список команд)
+│       ├── screen_token.go # ввод API-токена
+│       ├── screen_help.go  # справка по клавишам
+│       ├── screen_progress.go # экран прогресса (загрузка, установка)
+│       └── screen_update.go   # экраны обновления (подтверждение, ошибки, успех)
 ├── pkg/plugin/             # интерфейс плагина (Name, Run)
-├── api/                    # типы/клиенты протоколов MCP и Agent — заглушка
+├── api/                    # типы/клиенты протоколов MCP и Agent
 ├── configs/                # примеры YAML (config.example.yaml)
 ├── go.mod
 └── go.sum
 ```
 
+Подробнее про навигацию TUI и добавление новых экранов — см. [Навигация TUI и добавление экранов](#навигация-tui-и-добавление-экранов) ниже.
+
 Отдельные пакеты `internal/executor`, `internal/telemetry`, `internal/api` (LLM Proxy) и при необходимости `internal/tools` (Tool Registry) появятся при реализации соответствующих FR. Экран загрузки с прогресс-баром (ТЗ 5.2.2, FR-202) — см. [.workflow/PROGRESS-SCREEN.md](.workflow/PROGRESS-SCREEN.md).
+
+---
+
+## Навигация TUI и добавление экранов
+
+### Как устроена навигация
+
+TUI использует **стек экранов** (pushdown automaton): текущий экран — вершина стека, переходы выполняются тремя операциями без мутации модели (в духе Elm/Bubble Tea).
+
+| Операция | Назначение | Пример |
+|----------|------------|--------|
+| **PushScreen(m, s)** | Открыть экран поверх текущего; с него можно вернуться «назад» | F1 Help, F7 Token, пункт меню «Обновление» → подтверждение |
+| **PopScreen(m)** | Закрыть текущий экран и вернуться к предыдущему | Esc в Help/Token, «Нет»/Esc в диалоге обновления, Cancel на экранах ошибок |
+| **ReplaceScreen(m, s)** | Заменить текущий экран на другой (без добавления в стек); «назад» на предыдущий шаг потока нельзя | Подтверждение «Да» → Progress, Progress → Success/InstallError, Retry → Checking |
+
+- **Модель:** `Model.ScreenStack []Screen` — слайс экранов, верхний = активный. Метод `CurrentScreen()` возвращает вершину стека (или `ScreenMain`, если стек пуст).
+- **Роутинг:** в `Model.Update` и `Model.View` используется `m.CurrentScreen()`; по нему вызывается соответствующая функция `update*Screen` / `view*Screen`.
+- **Глобальные сообщения** (размер окна, результат проверки обновлений, результат установки) обрабатываются в `Update` до делегирования по экрану; смена экрана по ним — через `ReplaceScreen` или `PushScreen` (например, фоновая ошибка проверки — `PushScreen(ScreenUpdateCheckError)`).
+
+Подробнее: `internal/tui/model.go` (типы `Screen`, функции `PushScreen`, `PopScreen`, `ReplaceScreen`).
+
+### Как добавить новый экран
+
+1. **Добавить константу в enum `Screen`** в `internal/tui/model.go`:
+   ```go
+   const (
+       // ...
+       ScreenUpdateSuccess
+       ScreenMyNew        // новый экран
+   )
+   ```
+
+2. **При необходимости добавить состояние экрана** в `Model` (как `TokenScreenState`, `UpdateScreenState`) или переиспользовать существующие поля.
+
+3. **Реализовать отрисовку и обработку сообщений.** Варианты:
+   - добавить файл `internal/tui/screen_mynew.go` с функциями `viewMyNewScreen(m Model) tea.View` и `updateMyNewScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd)`;
+   - либо разместить их в подходящем существующем файле (например, в `screen_update.go` для экранов того же потока).
+
+4. **Подключить в роутинг** в `model.go`:
+   - в `Update`: в `switch m.CurrentScreen()` добавить ветку `case ScreenMyNew: return updateMyNewScreen(m, msg)`;
+   - в `View`: в `switch m.CurrentScreen()` добавить ветку `case ScreenMyNew: return viewMyNewScreen(m)`.
+
+5. **Переходы на новый экран и обратно** — только через стек:
+   - открыть поверх текущего (с возможностью «назад»): `m = PushScreen(m, ScreenMyNew)`; возврат: `m = PopScreen(m)`;
+   - заменить текущий экран (без «назад» в рамках этого шага): `m = ReplaceScreen(m, ScreenMyNew)`.
+
+6. **Глобальные сообщения:** если экран должен открываться по сообщению (аналогично `UpdateCheckErrorMsg`), в обработчике этого сообщения в `Model.Update` вызвать `PushScreen` или `ReplaceScreen`.
+
+Стили рамок и текста — в `internal/tui/styles.go` (`FrameWithTitle`, `FrameWithTitleSubtitle`, `BodyStyle`, `ButtonStyle` и т.д.).
+
+---
+
+## Сборка артефактов для релиза
+
+Артефакты для размещения в релизе (GitHub Releases или GitLab) собираются через Makefile с подстановкой версии в бинарь (для автообновления).
+
+### Быстрый вариант
+
+```bash
+make release VERSION=1.0.0
+```
+
+В каталоге `release/` появятся четыре файла с именами, ожидаемыми при скачивании (см. ниже). Эти файлы нужно загрузить в раздел **Assets** при создании релиза по тегу `v1.0.0`.
+
+### Что делает `make release`
+
+1. **Сборка под все платформы** (`make build-all`) с передачей версии в бинарь:
+   - `-ldflags "-X github.com/ai-launcher/cli/internal/modules/autoupdate.Version=$(VERSION)"`
+   - Результат в `dist/`: `ai-launcher-darwin-arm64`, `ai-launcher-darwin-amd64`, `ai-launcher-linux-amd64`, `ai-launcher-windows-amd64.exe`.
+
+2. **Копирование в `release/` с именами для GitHub** (с подчёркиваниями, без префикса `v` в имени файла):
+
+| Платформа   | Имя файла в `release/`              |
+|-------------|-------------------------------------|
+| macOS arm64 | `ai-launcher_darwin_arm64`          |
+| macOS Intel | `ai-launcher_darwin_amd64`          |
+| Linux amd64 | `ai-launcher_linux_amd64`          |
+| Windows amd64 | `ai-launcher_windows_amd64.exe`   |
+
+Формат URL скачивания (GitHub):  
+`https://github.com/{repo}/releases/download/{version}/ai-launcher_{GOOS}_{GOARCH}[.exe]`  
+— поэтому имена артефактов должны быть с подчёркиваниями.
+
+### Сборка без Makefile
+
+Одна платформа с версией:
+
+```bash
+VERSION=1.0.0
+go build -ldflags "-X github.com/ai-launcher/cli/internal/modules/autoupdate.Version=$VERSION" \
+  -o dist/ai-launcher ./cmd/ai-launcher
+```
+
+Все платформы вручную (четыре команды, подставьте свой `VERSION`):
+
+```bash
+VERSION=1.0.0
+LDFLAGS="-X github.com/ai-launcher/cli/internal/modules/autoupdate.Version=$VERSION"
+
+GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/ai-launcher-darwin-arm64 ./cmd/ai-launcher
+GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/ai-launcher-darwin-amd64 ./cmd/ai-launcher
+GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/ai-launcher-linux-amd64 ./cmd/ai-launcher
+GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/ai-launcher-windows-amd64.exe ./cmd/ai-launcher
+```
+
+После этого переименовать файлы в имена с подчёркиваниями и загрузить в релиз (см. таблицу выше).
+
+### Очистка
+
+```bash
+make clean
+```
+
+Удаляет каталоги `dist/` и `release/`.
+
+Полный сценарий: создание тега, публикация релиза на GitHub и проверка автообновления — в [RELEASE-AND-TEST-UPDATE.md](./RELEASE-AND-TEST-UPDATE.md).
 
 ---
 

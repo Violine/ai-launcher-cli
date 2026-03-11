@@ -87,13 +87,13 @@ func updateUpdateConfirmScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.Config != nil && m.Config.UpdateRepo != "" {
 					repo = m.Config.UpdateRepo
 				}
-				m.Screen = ScreenProgress
 				m.Progress.Title = "Update"
 				m.Progress.Status = "Скачивание и установка..."
 				m.Progress.Percent = -1
+				m = ReplaceScreen(m, ScreenProgress)
 				return m, runInstallCmd(repo, m.AvailableVersion)
 			}
-			m.Screen = ScreenMain
+			m = PopScreen(m)
 			return m, nil
 		case "tab", "right":
 			if m.UpdateState.ConfirmButtonFoc == UpdateButtonNo {
@@ -110,7 +110,7 @@ func updateUpdateConfirmScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "esc":
-			m.Screen = ScreenMain
+			m = PopScreen(m)
 			return m, nil
 		}
 	}
@@ -144,14 +144,14 @@ func updateUpdateCheckErrorScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.Config != nil && m.Config.UpdateRepo != "" {
 					repo = m.Config.UpdateRepo
 				}
-				m.Screen = ScreenUpdateChecking
 				m.Progress.Title = "Проверка обновлений"
 				m.Progress.Status = "Проверка обновлений..."
 				m.Progress.Percent = -1
+				m = ReplaceScreen(m, ScreenUpdateChecking)
 				return m, runCheckUpdateCmd(repo, m.CurrentVersion)
 			}
-			m.Screen = ScreenMain
 			m.UpdateState.CheckError = ""
+			m = PopScreen(m)
 			return m, nil
 		case "tab", "right":
 			m.UpdateState.ErrorButtonFoc = 1
@@ -160,8 +160,8 @@ func updateUpdateCheckErrorScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.UpdateState.ErrorButtonFoc = 0
 			return m, nil
 		case "esc":
-			m.Screen = ScreenMain
 			m.UpdateState.CheckError = ""
+			m = PopScreen(m)
 			return m, nil
 		}
 	}
@@ -195,14 +195,14 @@ func updateUpdateInstallErrorScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.Config != nil && m.Config.UpdateRepo != "" {
 					repo = m.Config.UpdateRepo
 				}
-				m.Screen = ScreenProgress
 				m.Progress.Title = "Update"
 				m.Progress.Status = "Скачивание и установка..."
 				m.Progress.Percent = -1
+				m = ReplaceScreen(m, ScreenProgress)
 				return m, runInstallCmd(repo, m.AvailableVersion)
 			}
-			m.Screen = ScreenMain
 			m.UpdateState.InstallError = ""
+			m = PopScreen(m)
 			return m, nil
 		case "tab", "right":
 			m.UpdateState.ErrorButtonFoc = 1
@@ -211,8 +211,8 @@ func updateUpdateInstallErrorScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.UpdateState.ErrorButtonFoc = 0
 			return m, nil
 		case "esc":
-			m.Screen = ScreenMain
 			m.UpdateState.InstallError = ""
+			m = PopScreen(m)
 			return m, nil
 		}
 	}
