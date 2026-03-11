@@ -49,7 +49,7 @@ func main() {
 		for _, p := range plugins {
 			commandNames = append(commandNames, p.Name())
 		}
-		p := tea.NewProgram(tui.NewModelNoConfig(commandNames))
+		p := tea.NewProgram(tui.NewModel(cfg, commandNames))
 		if _, err := p.Run(); err != nil {
 			// No TTY (e.g. pipe, IDE): show usage and exit 0 instead of failing
 			if strings.Contains(err.Error(), "TTY") || strings.Contains(err.Error(), "tty") {
