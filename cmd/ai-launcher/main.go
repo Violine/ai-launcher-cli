@@ -53,8 +53,13 @@ func main() {
 
 	// No args: start TUI (agreed default)
 	if len(os.Args) < 2 {
-		p := tea.NewProgram(tui.NewModel(cfg, menuLabels))
-		if _, err := p.Run(); err != nil {
+		commandNames := make([]string, len(plugins))
+		for i, p := range plugins {
+			commandNames[i] = p.Name()
+		}
+		prog := tea.NewProgram(tui.NewModel(cfg, menuLabels, commandNames))
+		finalModel, err := prog.Run()
+		if err != nil {
 			// No TTY (e.g. pipe, IDE): show usage and exit 0 instead of failing
 			if strings.Contains(err.Error(), "TTY") || strings.Contains(err.Error(), "tty") {
 				fmt.Println("Usage: ai-launcher [<command>]")
@@ -66,6 +71,16 @@ func main() {
 			}
 			fmt.Fprintf(os.Stderr, "tui: %v\n", err)
 			os.Exit(1)
+		}
+		// If user selected a command with Enter, run it
+		if tuiModel, ok := finalModel.(tui.Model); ok && tuiModel.RunCommandIndex >= 0 && tuiModel.RunCommandIndex < len(tuiModel.CommandNames) {
+			cmdName := tuiModel.CommandNames[tuiModel.RunCommandIndex]
+			plug := byName[cmdName]
+			ctx := context.WithValue(context.Background(), plugin.ConfigKey, cfg)
+			if err := plug.Run(ctx); err != nil {
+				fmt.Fprintf(os.Stderr, "%s: %v\n", cmdName, err)
+				os.Exit(1)
+			}
 		}
 		return
 	}

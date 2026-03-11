@@ -6,7 +6,8 @@ import (
 )
 
 // FrameWidth is the minimum width of the content area on all screens (consistent layout).
-const FrameWidth = 56
+// Wide enough for footer hints (e.g. "↑/↓ or 1-9: select   Enter: run   F1 Help   F7 Token   F10 Exit").
+const FrameWidth = 72
 
 // Colors from spec 5.1
 const (
@@ -38,7 +39,8 @@ var (
 			BorderForeground(lipgloss.Color(ColorTitleFrame)).
 			Padding(0, 2)
 
-	// ContentBox ensures body has fixed width so all screens look the same
+	// ContentBox ensures body has fixed width so all screens look the same.
+	// Use ContentBoxWidth(w) for dynamic width (e.g. terminal width).
 	ContentBoxStyle = lipgloss.NewStyle().
 			Width(FrameWidth).
 			MaxWidth(FrameWidth)
@@ -92,10 +94,14 @@ var (
 )
 
 // FrameWithTitle renders a bordered block with title (for token/main/help screens).
-// Body is wrapped to FrameWidth for consistent width across screens.
-func FrameWithTitle(title, body string) string {
+// width is the content area width (e.g. from Model.ContentWidth()); if <= 0, FrameWidth is used.
+func FrameWithTitle(title, body string, width int) string {
+	if width <= 0 {
+		width = FrameWidth
+	}
 	titleRendered := TitleStyle.Render(title)
-	bodyBoxed := ContentBoxStyle.Render(body)
+	contentStyle := ContentBoxStyle.Copy().Width(width).MaxWidth(width)
+	bodyBoxed := contentStyle.Render(body)
 	inner := BorderStyle.Render(bodyBoxed)
 	return RootStyle.Render(lipgloss.JoinVertical(lipgloss.Left, titleRendered, "", inner))
 }
