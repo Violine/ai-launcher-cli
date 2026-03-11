@@ -6,6 +6,7 @@
 *.dylib
 /ai-launcher
 /cmd/ai-launcher/ai-launcher
+/dist/
 
 # Go
 /vendor/
