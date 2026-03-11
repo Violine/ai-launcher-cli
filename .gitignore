@@ -1,0 +1,33 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/ai-launcher
+/cmd/ai-launcher/ai-launcher
+
+# Go
+/vendor/
+*.test
+*.out
+coverage.html
+coverage.txt
+
+# IDE
+.idea/
+*.iml
+projectFilesBackup/
+.vscode/
+
+# Cursor / debug
+.cursor/debug-*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
+*.local.yaml
