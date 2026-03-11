@@ -43,20 +43,24 @@ func main() {
 		byName[p.Name()] = p
 	}
 
+	// Display names for TUI menu (same order as plugins). Prefix: [TODO] — not implemented, [Скоро] — in progress.
+	menuLabels := []string{
+		"[TODO] Generate config (Claude/OpenCode)",
+		"[TODO] Update MCP packages",
+		"[TODO] Run AI agent",
+		"[Скоро] AI Launcher Update",
+	}
+
 	// No args: start TUI (agreed default)
 	if len(os.Args) < 2 {
-		commandNames := make([]string, 0, len(plugins))
-		for _, p := range plugins {
-			commandNames = append(commandNames, p.Name())
-		}
-		p := tea.NewProgram(tui.NewModel(cfg, commandNames))
+		p := tea.NewProgram(tui.NewModel(cfg, menuLabels))
 		if _, err := p.Run(); err != nil {
 			// No TTY (e.g. pipe, IDE): show usage and exit 0 instead of failing
 			if strings.Contains(err.Error(), "TTY") || strings.Contains(err.Error(), "tty") {
 				fmt.Println("Usage: ai-launcher [<command>]")
 				fmt.Println("Commands:")
-				for _, name := range commandNames {
-					fmt.Printf("  %s\n", name)
+				for _, p := range plugins {
+					fmt.Printf("  %s\n", p.Name())
 				}
 				return
 			}

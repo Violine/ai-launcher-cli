@@ -13,8 +13,9 @@ import (
 type Screen int
 
 const (
-	ScreenMain Screen = iota
+	ScreenMain  Screen = iota
 	ScreenToken
+	ScreenHelp
 )
 
 // Button for token screen OK/Cancel.
@@ -31,10 +32,13 @@ type Model struct {
 	Config   *config.Config
 	Commands []string
 
+	// When Screen == ScreenHelp, return to this screen on F1/Esc
+	PrevScreen Screen
+
 	// Token screen state
-	TokenInput      string
-	TokenError      string
-	TokenButtonFoc  TokenButton
+	TokenInput     string
+	TokenError     string
+	TokenButtonFoc TokenButton
 }
 
 // NewModel creates the initial TUI model. If cfg has no API key, starts on token screen.
@@ -70,30 +74,46 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c", "f10":
 			return m, tea.Quit
+		case "f1":
+			if m.Screen == ScreenHelp {
+				m.Screen = m.PrevScreen
+				return m, nil
+			}
+			m.PrevScreen = m.Screen
+			m.Screen = ScreenHelp
+			return m, nil
 		}
 	}
 	// Delegate to screen
-	if m.Screen == ScreenToken {
+	switch m.Screen {
+	case ScreenHelp:
+		return updateHelpScreen(m, msg)
+	case ScreenToken:
 		return updateTokenScreen(m, msg)
+	default:
+		return updateMainScreen(m, msg)
 	}
-	return updateMainScreen(m, msg)
 }
 
 // View renders the UI.
 func (m Model) View() tea.View {
-	if m.Screen == ScreenToken {
+	switch m.Screen {
+	case ScreenHelp:
+		return viewHelpScreen(m)
+	case ScreenToken:
 		return viewTokenScreen(m)
+	default:
+		return viewMainScreen(m)
 	}
-	return viewMainScreen(m)
 }
 
 func viewMainScreen(m Model) tea.View {
-	body := BodyStyle.Render("Commands:")
+	body := SectionStyle.Render("Commands:")
 	body += "\n\n"
 	for _, name := range m.Commands {
 		body += "  " + BodyStyle.Render(name) + "\n"
 	}
-	body += "\n" + FooterStyle.Render("F7 Token  F10 Exit")
+	body += "\n" + FooterStyle.Render("F1 Help   F7 Token   F10 Exit")
 	rendered := FrameWithTitle("  AI LAUNCHER  ", body)
 	return tea.NewView(rendered)
 }
@@ -101,12 +121,15 @@ func viewMainScreen(m Model) tea.View {
 func viewTokenScreen(m Model) tea.View {
 	body := BodyStyle.Render("Enter your API token to continue:")
 	body += "\n\n  "
-	// Input line: mask with * (FR-102), min width 40
+	// Input line: mask with * (FR-102), fixed width to match frame
+	fieldWidth := FrameWidth - 6
+	if fieldWidth < 20 {
+		fieldWidth = 20
+	}
 	mask := strings.Repeat("*", len(m.TokenInput))
 	if mask == "" {
 		mask = " "
 	}
-	fieldWidth := 40
 	if len(mask) < fieldWidth {
 		mask += strings.Repeat(" ", fieldWidth-len(mask))
 	} else {
@@ -125,9 +148,40 @@ func viewTokenScreen(m Model) tea.View {
 	if m.TokenError != "" {
 		body += "\n  " + ErrorStyle.Render(m.TokenError) + "\n"
 	}
-	body += "\n" + FooterStyle.Render("F1 Help                              F10 Exit")
+	body += "\n" + FooterStyle.Render("F1 Help   Tab: switch button   Enter: confirm   Esc: back   F10 Exit")
 	rendered := FrameWithTitle("  API TOKEN  ", body)
 	return tea.NewView(rendered)
+}
+
+func viewHelpScreen(m Model) tea.View {
+	lines := []string{
+		HelpKeyStyle.Render("F1") + "    " + HelpDescStyle.Render("Show / hide this help"),
+		HelpKeyStyle.Render("F7") + "    " + HelpDescStyle.Render("Open API token screen (from main menu)"),
+		HelpKeyStyle.Render("F10") + "   " + HelpDescStyle.Render("Exit application"),
+		"",
+		HelpKeyStyle.Render("Tab / ←→") + "  " + HelpDescStyle.Render("Switch between OK / Cancel on token screen"),
+		HelpKeyStyle.Render("Enter") + "  " + HelpDescStyle.Render("Confirm (OK) or go back (Cancel)"),
+		HelpKeyStyle.Render("Esc") + "    " + HelpDescStyle.Render("Cancel / back to menu"),
+	}
+	body := ""
+	for _, line := range lines {
+		body += line + "\n"
+	}
+	body += "\n" + FooterStyle.Render("F1 or Esc to close help")
+	rendered := FrameWithTitle("  HELP  ", body)
+	return tea.NewView(rendered)
+}
+
+func updateHelpScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		switch msg.String() {
+		case "f1", "esc":
+			m.Screen = m.PrevScreen
+			return m, nil
+		}
+	}
+	return m, nil
 }
 
 func updateMainScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -175,8 +229,11 @@ func updateTokenScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.TokenInput = ""
 				return m, nil
 			}
-			// Cancel: quit
-			return m, tea.Quit
+			// Cancel: return to main menu (do not quit)
+			m.Screen = ScreenMain
+			m.TokenError = ""
+			m.TokenInput = ""
+			return m, nil
 		case "tab", "right":
 			m.TokenButtonFoc = TokenButtonCancel
 			m.TokenError = ""
@@ -186,7 +243,11 @@ func updateTokenScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.TokenError = ""
 			return m, nil
 		case "esc":
-			return m, tea.Quit
+			// Esc: return to main menu (same as Cancel)
+			m.Screen = ScreenMain
+			m.TokenError = ""
+			m.TokenInput = ""
+			return m, nil
 		case "backspace":
 			if len(m.TokenInput) > 0 {
 				m.TokenInput = m.TokenInput[:len(m.TokenInput)-1]
