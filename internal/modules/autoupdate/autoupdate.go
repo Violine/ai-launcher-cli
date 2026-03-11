@@ -19,10 +19,11 @@ func (Plugin) Name() string {
 	return "autoupdate"
 }
 
-// Run checks for updates in the background. Later: compare with Version and notify.
+// Run checks for updates. Used when user runs "ai-launcher autoupdate".
+// For FR-601 (check at startup in background), main starts a goroutine that calls updater.CheckInBackground.
 func (Plugin) Run(ctx context.Context) error {
 	_ = ctx
-	updater.CheckInBackground(Version)
+	updater.CheckInBackground(Version, nil)
 	return nil
 }
 

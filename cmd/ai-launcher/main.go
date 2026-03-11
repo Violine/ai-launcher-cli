@@ -12,6 +12,7 @@ import (
 	"github.com/ai-launcher/cli/internal/modules/autoupdate"
 	"github.com/ai-launcher/cli/internal/modules/configgen"
 	"github.com/ai-launcher/cli/internal/modules/mcpupdate"
+	"github.com/ai-launcher/cli/internal/updater"
 	"github.com/ai-launcher/cli/pkg/plugin"
 )
 
@@ -21,6 +22,11 @@ func main() {
 		fmt.Fprintf(os.Stderr, "config: %v\n", err)
 		os.Exit(1)
 	}
+
+	// FR-601: check for updates in background at startup (non-blocking)
+	go updater.CheckInBackground(autoupdate.Version, func(available string) {
+		fmt.Fprintf(os.Stderr, "Update available: %s (current: %s). Run 'ai-launcher autoupdate' to install.\n", available, autoupdate.Version)
+	})
 
 	plugins := []plugin.Plugin{
 		configgen.New(),

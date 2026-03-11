@@ -18,11 +18,24 @@ const (
 	DefaultRepo = "ai-launcher/cli"
 )
 
-// CheckInBackground проверяет обновления в фоне и при наличии новой версии
-// может отправить уведомление (FR-601, FR-603). Пока заглушка.
-func CheckInBackground(currentVersion string) {
-	_, _ = LatestRelease("")
-	// TODO: сравнить с currentVersion по semver, показать уведомление в TUI
+// CheckInBackground проверяет обновления (FR-601). Вызывать из main в горутине.
+// Если доступна версия новее currentVersion, вызывается onNewVersion(available).
+// При ошибке сети или парсинга версий просто выходит без вызова.
+func CheckInBackground(currentVersion string, onNewVersion func(available string)) {
+	latest, err := LatestRelease("")
+	if err != nil {
+		return
+	}
+	if latest == "" {
+		return
+	}
+	newer, err := NewerThan(currentVersion, latest)
+	if err != nil || !newer {
+		return
+	}
+	if onNewVersion != nil {
+		onNewVersion(latest)
+	}
 }
 
 // LatestRelease возвращает последнюю доступную версию (тег) для репозитория.
