@@ -136,6 +136,58 @@ func updateMainScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func updateTokenScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Input and OK/Cancel will be added in later commits
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		s := msg.String()
+		switch s {
+		case "enter":
+			if m.TokenButtonFoc == TokenButtonOK {
+				// Validate and save (FR-103, FR-104, FR-105/106)
+				if err := config.ValidateAPIKey(m.TokenInput); err != nil {
+					m.TokenError = err.Error()
+					return m, nil
+				}
+				cfg := m.Config
+				if cfg == nil {
+					cfg = &config.Config{}
+				}
+				cfg.APIKey = strings.TrimSpace(m.TokenInput)
+				if err := config.Save(cfg); err != nil {
+					m.TokenError = err.Error()
+					return m, nil
+				}
+				m.Config = cfg
+				m.Screen = ScreenMain
+				m.TokenError = ""
+				m.TokenInput = ""
+				return m, nil
+			}
+			// Cancel: quit
+			return m, tea.Quit
+		case "tab", "right":
+			m.TokenButtonFoc = TokenButtonCancel
+			m.TokenError = ""
+			return m, nil
+		case "shift+tab", "left":
+			m.TokenButtonFoc = TokenButtonOK
+			m.TokenError = ""
+			return m, nil
+		case "esc":
+			return m, tea.Quit
+		case "backspace":
+			if len(m.TokenInput) > 0 {
+				m.TokenInput = m.TokenInput[:len(m.TokenInput)-1]
+				m.TokenError = ""
+			}
+			return m, nil
+		default:
+			// Single rune: append to input (FR-101)
+			if len(s) == 1 && s[0] >= 32 && s[0] != 127 {
+				m.TokenInput += s
+				m.TokenError = ""
+				return m, nil
+			}
+		}
+	}
 	return m, nil
 }
