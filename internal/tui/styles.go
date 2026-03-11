@@ -6,7 +6,7 @@ import (
 )
 
 // FrameWidth is the minimum width of the content area on all screens (consistent layout).
-// Wide enough for footer hints (e.g. "↑/↓ or 1-9: select   Enter: run   F1 Help   F7 Token   F10 Exit").
+// Wide enough for footer hints (e.g. "↑/↓ or 1-4: select   Enter: run   F1 Help   F7 Token   F10 Exit").
 const FrameWidth = 72
 
 // Colors from spec 5.1
@@ -37,22 +37,25 @@ var (
 	BorderStyle = lipgloss.NewStyle().
 			BorderStyle(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color(ColorTitleFrame)).
+			Background(lipgloss.Color(ColorBackground)).
 			Padding(0, 2)
 
-	// ContentBox ensures body has fixed width so all screens look the same.
-	// Use ContentBoxWidth(w) for dynamic width (e.g. terminal width).
+	// ContentBox ensures body has fixed width and blue fill so no black gaps between lines.
 	ContentBoxStyle = lipgloss.NewStyle().
 			Width(FrameWidth).
-			MaxWidth(FrameWidth)
+			MaxWidth(FrameWidth).
+			Background(lipgloss.Color(ColorBackground))
 
-	// Body text: white
+	// Body text: white on blue so content area stays filled
 	BodyStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(ColorText))
+			Foreground(lipgloss.Color(ColorText)).
+			Background(lipgloss.Color(ColorBackground))
 
 	// Section heading (e.g. "Commands:")
 	SectionStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColorTitleFrame)).
-			Bold(true)
+			Bold(true).
+			Background(lipgloss.Color(ColorBackground))
 
 	// Highlight (selected row, active field): cyan on black
 	HighlightStyle = lipgloss.NewStyle().
@@ -74,23 +77,27 @@ var (
 				Padding(0, 2).
 				Bold(true)
 
-	// Footer hint (F-keys)
+	// Footer hint (F-keys): on blue
 	FooterStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColorTitleFrame)).
+			Background(lipgloss.Color(ColorBackground)).
 			MarginTop(1).
 			Bold(false)
 
-	// Error message
+	// Error message: on blue
 	ErrorStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColorButtonActive)).
-			Bold(true)
+			Bold(true).
+			Background(lipgloss.Color(ColorBackground))
 
-	// Help screen: key description
+	// Help screen: key description, on blue
 	HelpKeyStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColorHighlight)).
-			Bold(true)
+			Bold(true).
+			Background(lipgloss.Color(ColorBackground))
 	HelpDescStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(ColorText))
+			Foreground(lipgloss.Color(ColorText)).
+			Background(lipgloss.Color(ColorBackground))
 
 	// Version under the title: not bold, dimmer (visually smaller)
 	VersionStyle = lipgloss.NewStyle().
@@ -105,14 +112,23 @@ func FrameWithTitle(title, body string, width int) string {
 }
 
 // FrameWithTitleSubtitle renders title, optional subtitle (e.g. version) directly under it, then the bordered body.
+// Title and subtitle are given the same blue background as root so the whole header area is filled.
 func FrameWithTitleSubtitle(title, subtitle, body string, width int) string {
 	if width <= 0 {
 		width = FrameWidth
 	}
-	titleRendered := TitleStyle.Render(title)
-	blocks := []string{titleRendered}
+	// Bordered box width = content width + inner padding 2+2 + border 1+1
+	fullWidth := width + 6
+	titleBlock := TitleStyle.Copy().
+		Background(lipgloss.Color(ColorBackground)).
+		Width(fullWidth).
+		Render(title)
+	blocks := []string{titleBlock}
 	if subtitle != "" {
-		blocks = append(blocks, VersionStyle.Render(subtitle))
+		blocks = append(blocks, VersionStyle.Copy().
+			Background(lipgloss.Color(ColorBackground)).
+			Width(fullWidth).
+			Render(subtitle))
 	}
 	blocks = append(blocks, "", BorderStyle.Render(ContentBoxStyle.Copy().Width(width).MaxWidth(width).Render(body)))
 	return RootStyle.Render(lipgloss.JoinVertical(lipgloss.Left, blocks...))
