@@ -3,6 +3,9 @@
 
 api_key: ""
 
+# Repo for launcher self-update checks (GitHub: owner/repo). Empty = use app default.
+# update_repo: "yourname/ai-launcher-cli"
+
 mcp_registry: "https://gitlab.example.com/api/v4/projects/123/packages/npm"
 
 tools:
