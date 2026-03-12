@@ -102,8 +102,8 @@ func main() {
 			os.Exit(1)
 		}
 		// If user selected a command with Enter, run it (except autoupdate — handled fully in TUI)
-		if tuiModel, ok := finalModel.(tui.Model); ok && tuiModel.RunCommandIndex >= 0 && tuiModel.RunCommandIndex < len(tuiModel.CommandNames) {
-			cmdName := tuiModel.CommandNames[tuiModel.RunCommandIndex]
+		if rootModel, ok := finalModel.(*tui.RootModel); ok && rootModel.RunCommandIndex() >= 0 && rootModel.RunCommandIndex() < len(rootModel.CommandNames()) {
+			cmdName := rootModel.CommandNames()[rootModel.RunCommandIndex()]
 			if cmdName == "autoupdate" {
 				return
 			}

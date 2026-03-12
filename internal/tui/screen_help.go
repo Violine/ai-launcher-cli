@@ -8,13 +8,29 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-func viewHelpScreen(m Model) tea.View {
-	contentWidth := m.ContentWidth()
-	n := len(m.Commands)
+// HelpModel is the help screen.
+type HelpModel struct {
+	Shared *SharedState
+}
+
+// NewHelpModel creates a new help screen model.
+func NewHelpModel(shared *SharedState) *HelpModel {
+	return &HelpModel{Shared: shared}
+}
+
+// ID implements ScreenModel.
+func (m *HelpModel) ID() Screen { return ScreenHelp }
+
+// Init implements tea.Model.
+func (m *HelpModel) Init() tea.Cmd { return nil }
+
+// View implements tea.Model.
+func (m *HelpModel) View() tea.View {
+	contentWidth := m.Shared.ContentWidth()
+	n := len(m.Shared.Commands)
 	if n <= 0 {
 		n = 4
 	}
-	// Пробелы между ключом и описанием — синий фон (HelpDescStyle)
 	pad := func(s string) string { return HelpDescStyle.Render(s) }
 	lines := []string{
 		HelpKeyStyle.Render("F1") + pad("    ") + HelpDescStyle.Render("Show / hide this help"),
@@ -34,8 +50,8 @@ func viewHelpScreen(m Model) tea.View {
 			continue
 		}
 		body += line
-		if pad := contentWidth - lipgloss.Width(line); pad > 0 {
-			body += HelpDescStyle.Render(strings.Repeat(" ", pad))
+		if p := contentWidth - lipgloss.Width(line); p > 0 {
+			body += HelpDescStyle.Render(strings.Repeat(" ", p))
 		}
 		body += "\n"
 	}
@@ -45,17 +61,16 @@ func viewHelpScreen(m Model) tea.View {
 		footerPad = 0
 	}
 	body += "\n" + FooterStyle.Render(footerStr+strings.Repeat(" ", footerPad)) + "\n" + FooterStyle.Render(strings.Repeat(" ", contentWidth))
-	rendered := FrameWithTitle("  HELP  ", body, contentWidth)
-	return tea.NewView(rendered)
+	return tea.NewView(FrameWithTitle("  HELP  ", body, contentWidth))
 }
 
-func updateHelpScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+// Update implements tea.Model.
+func (m *HelpModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "f1", "esc":
-			m = PopScreen(m)
-			return m, nil
+			return m, PopScreenCmd()
 		}
 	}
 	return m, nil

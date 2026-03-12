@@ -8,26 +8,55 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-func viewProgressScreen(m Model) tea.View {
-	contentWidth := m.ContentWidth()
-	title := m.Progress.Title
+// ProgressModel is the progress/loading screen (also used for update checking).
+type ProgressModel struct {
+	Shared  *SharedState
+	Id      Screen
+	Title   string
+	Status  string
+	Percent int
+}
+
+// NewProgressModel creates a new progress screen model. If title/status are empty, defaults are used.
+func NewProgressModel(shared *SharedState, title, status string) *ProgressModel {
 	if title == "" {
 		title = "LOADING"
 	}
-	desc := "Loading..."
-	if m.Progress.Status != "" {
-		desc = m.Progress.Status
-	} else if m.Progress.Title != "" {
-		desc = m.Progress.Title
+	if status == "" {
+		status = "Loading..."
 	}
+	return &ProgressModel{Shared: shared, Id: ScreenProgress, Title: title, Status: status, Percent: -1}
+}
+
+// NewProgressModelForUpdateChecking creates a progress model for the update-checking screen.
+func NewProgressModelForUpdateChecking(shared *SharedState) *ProgressModel {
+	return &ProgressModel{
+		Shared:  shared,
+		Id:      ScreenUpdateChecking,
+		Title:   "Проверка обновлений",
+		Status:  "Проверка обновлений...",
+		Percent: -1,
+	}
+}
+
+// ID implements ScreenModel.
+func (m *ProgressModel) ID() Screen { return m.Id }
+
+// Init implements tea.Model.
+func (m *ProgressModel) Init() tea.Cmd { return nil }
+
+// View implements tea.Model.
+func (m *ProgressModel) View() tea.View {
+	contentWidth := m.Shared.ContentWidth()
+	desc := m.Status
 	body := BodyStyle.Render(desc)
 	if pad := contentWidth - lipgloss.Width(body); pad > 0 {
 		body += BodyStyle.Render(strings.Repeat(" ", pad))
 	}
 	body += "\n\n" + BodyStyle.Render("  ")
 	barWidth := 40
-	if m.Progress.Percent >= 0 && m.Progress.Percent <= 100 {
-		filled := m.Progress.Percent * barWidth / 100
+	if m.Percent >= 0 && m.Percent <= 100 {
+		filled := m.Percent * barWidth / 100
 		if filled > barWidth {
 			filled = barWidth
 		}
@@ -37,7 +66,7 @@ func viewProgressScreen(m Model) tea.View {
 			line2 += BodyStyle.Render(strings.Repeat(" ", pad))
 		}
 		body += line2 + "\n\n" + BodyStyle.Render("  ")
-		line3 := BodyStyle.Render(fmt.Sprintf("%d%%", m.Progress.Percent))
+		line3 := BodyStyle.Render(fmt.Sprintf("%d%%", m.Percent))
 		if pad := contentWidth - lipgloss.Width(line3); pad > 0 {
 			line3 += BodyStyle.Render(strings.Repeat(" ", pad))
 		}
@@ -62,10 +91,10 @@ func viewProgressScreen(m Model) tea.View {
 		pad = 0
 	}
 	body += FooterStyle.Render(footerStr+strings.Repeat(" ", pad)) + "\n" + FooterStyle.Render(strings.Repeat(" ", contentWidth))
-	rendered := FrameWithTitle("  "+title+"  ", body, contentWidth)
-	return tea.NewView(rendered)
+	return tea.NewView(FrameWithTitle("  "+m.Title+"  ", body, contentWidth))
 }
 
-func updateProgressScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+// Update implements tea.Model.
+func (m *ProgressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }

@@ -59,25 +59,39 @@ func runInstallCmd(repo, version string) tea.Cmd {
 	}
 }
 
-func viewUpdateConfirmScreen(m Model) tea.View {
-	contentWidth := m.ContentWidth()
-	current := m.CurrentVersion
+// --- UpdateConfirmModel ---
+
+type UpdateConfirmModel struct {
+	Shared        *SharedState
+	ConfirmButtonFoc UpdateButton
+}
+
+func NewUpdateConfirmModel(shared *SharedState) *UpdateConfirmModel {
+	return &UpdateConfirmModel{Shared: shared, ConfirmButtonFoc: UpdateButtonYes}
+}
+
+func (m *UpdateConfirmModel) ID() Screen { return ScreenUpdateConfirm }
+func (m *UpdateConfirmModel) Init() tea.Cmd { return nil }
+
+func (m *UpdateConfirmModel) View() tea.View {
+	s := m.Shared
+	contentWidth := s.ContentWidth()
+	current := s.CurrentVersion
 	if current == "" {
 		current = "0.0.0"
 	}
-	body := BodyStyle.Render(fmt.Sprintf("Доступна версия %s (текущая: %s). Установить?", m.AvailableVersion, current))
+	body := BodyStyle.Render(fmt.Sprintf("Доступна версия %s (текущая: %s). Установить?", s.AvailableVersion, current))
 	if pad := contentWidth - lipgloss.Width(body); pad > 0 {
 		body += BodyStyle.Render(strings.Repeat(" ", pad))
 	}
 	body += "\n\n" + BodyStyle.Render("  ")
 	yesBtn := ButtonStyle.Render("[ Y ] Да")
 	noBtn := ButtonStyle.Render("[ N ] Нет")
-	if m.UpdateState.ConfirmButtonFoc == UpdateButtonYes {
+	if m.ConfirmButtonFoc == UpdateButtonYes {
 		yesBtn = ButtonActiveStyle.Render("[ Y ] Да")
 	} else {
 		noBtn = ButtonActiveStyle.Render("[ N ] Нет")
 	}
-	// Пробел между кнопками — синий фон, чтобы не было чёрной полосы
 	body += yesBtn + BodyStyle.Render("  ") + noBtn
 	if pad := contentWidth - lipgloss.Width(body); pad > 0 {
 		body += BodyStyle.Render(strings.Repeat(" ", pad))
@@ -88,68 +102,73 @@ func viewUpdateConfirmScreen(m Model) tea.View {
 	if pad < 0 {
 		pad = 0
 	}
-	// Вся строка футера одним рендером — синий фон до конца
-	footerLine := FooterStyle.Render(footerStr + strings.Repeat(" ", pad))
-	body += footerLine + "\n" + FooterStyle.Render(strings.Repeat(" ", m.ContentWidth()))
-	rendered := FrameWithTitle("  ОБНОВЛЕНИЕ  ", body, m.ContentWidth())
-	return tea.NewView(rendered)
+	body += FooterStyle.Render(footerStr+strings.Repeat(" ", pad)) + "\n" + FooterStyle.Render(strings.Repeat(" ", contentWidth))
+	return tea.NewView(FrameWithTitle("  ОБНОВЛЕНИЕ  ", body, contentWidth))
 }
 
-func updateUpdateConfirmScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *UpdateConfirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "enter":
-			if m.UpdateState.ConfirmButtonFoc == UpdateButtonYes {
+			if m.ConfirmButtonFoc == UpdateButtonYes {
 				repo := updater.DefaultRepo
-				if m.Config != nil && m.Config.UpdateRepo != "" {
-					repo = m.Config.UpdateRepo
+				if m.Shared.Config != nil && m.Shared.Config.UpdateRepo != "" {
+					repo = m.Shared.Config.UpdateRepo
 				}
-				m.Progress.Title = "Update"
-				m.Progress.Status = "Скачивание и установка..."
-				m.Progress.Percent = -1
-				m = ReplaceScreen(m, ScreenProgress)
-				return m, runInstallCmd(repo, m.AvailableVersion)
+				return m, tea.Sequence(ReplaceScreenCmd(ScreenProgress), runInstallCmd(repo, m.Shared.AvailableVersion))
 			}
-			m = PopScreen(m)
-			return m, nil
+			return m, PopScreenCmd()
 		case "tab", "right":
-			if m.UpdateState.ConfirmButtonFoc == UpdateButtonNo {
-				m.UpdateState.ConfirmButtonFoc = UpdateButtonYes
+			if m.ConfirmButtonFoc == UpdateButtonNo {
+				m.ConfirmButtonFoc = UpdateButtonYes
 			} else {
-				m.UpdateState.ConfirmButtonFoc = UpdateButtonNo
+				m.ConfirmButtonFoc = UpdateButtonNo
 			}
 			return m, nil
 		case "shift+tab", "left":
-			if m.UpdateState.ConfirmButtonFoc == UpdateButtonYes {
-				m.UpdateState.ConfirmButtonFoc = UpdateButtonNo
+			if m.ConfirmButtonFoc == UpdateButtonYes {
+				m.ConfirmButtonFoc = UpdateButtonNo
 			} else {
-				m.UpdateState.ConfirmButtonFoc = UpdateButtonYes
+				m.ConfirmButtonFoc = UpdateButtonYes
 			}
 			return m, nil
 		case "esc":
-			m = PopScreen(m)
-			return m, nil
+			return m, PopScreenCmd()
 		}
 	}
 	return m, nil
 }
 
-func viewUpdateCheckErrorScreen(m Model) tea.View {
-	contentWidth := m.ContentWidth()
+// --- UpdateCheckErrorModel ---
+
+type UpdateCheckErrorModel struct {
+	Shared        *SharedState
+	ErrorButtonFoc int
+}
+
+func NewUpdateCheckErrorModel(shared *SharedState) *UpdateCheckErrorModel {
+	return &UpdateCheckErrorModel{Shared: shared}
+}
+
+func (m *UpdateCheckErrorModel) ID() Screen { return ScreenUpdateCheckError }
+func (m *UpdateCheckErrorModel) Init() tea.Cmd { return nil }
+
+func (m *UpdateCheckErrorModel) View() tea.View {
+	contentWidth := m.Shared.ContentWidth()
 	body := BodyStyle.Render("Не удалось проверить обновления:")
 	if pad := contentWidth - lipgloss.Width(body); pad > 0 {
 		body += BodyStyle.Render(strings.Repeat(" ", pad))
 	}
 	body += "\n\n"
-	line2 := BodyStyle.Render("  ") + ErrorStyle.Render(m.UpdateState.CheckError)
+	line2 := BodyStyle.Render("  ") + ErrorStyle.Render(m.Shared.CheckError)
 	if pad := contentWidth - lipgloss.Width(line2); pad > 0 {
 		line2 += BodyStyle.Render(strings.Repeat(" ", pad))
 	}
 	body += line2 + "\n\n" + BodyStyle.Render("  ")
 	retryBtn := ButtonStyle.Render("[ Retry ]")
 	cancelBtn := ButtonStyle.Render("[ Cancel ]")
-	if m.UpdateState.ErrorButtonFoc == 0 {
+	if m.ErrorButtonFoc == 0 {
 		retryBtn = ButtonActiveStyle.Render("[ Retry ]")
 	} else {
 		cancelBtn = ButtonActiveStyle.Render("[ Cancel ]")
@@ -165,59 +184,67 @@ func viewUpdateCheckErrorScreen(m Model) tea.View {
 		pad = 0
 	}
 	body += FooterStyle.Render(footerStr+strings.Repeat(" ", pad)) + "\n" + FooterStyle.Render(strings.Repeat(" ", contentWidth))
-	rendered := FrameWithTitle("  Ошибка проверки  ", body, contentWidth)
-	return tea.NewView(rendered)
+	return tea.NewView(FrameWithTitle("  Ошибка проверки  ", body, contentWidth))
 }
 
-func updateUpdateCheckErrorScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *UpdateCheckErrorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "enter":
-			if m.UpdateState.ErrorButtonFoc == 0 {
+			if m.ErrorButtonFoc == 0 {
 				repo := updater.DefaultRepo
-				if m.Config != nil && m.Config.UpdateRepo != "" {
-					repo = m.Config.UpdateRepo
+				if m.Shared.Config != nil && m.Shared.Config.UpdateRepo != "" {
+					repo = m.Shared.Config.UpdateRepo
 				}
-				m.Progress.Title = "Проверка обновлений"
-				m.Progress.Status = "Проверка обновлений..."
-				m.Progress.Percent = -1
-				m = ReplaceScreen(m, ScreenUpdateChecking)
-				return m, runCheckUpdateCmd(repo, m.CurrentVersion)
+				m.Shared.CheckError = ""
+				return m, tea.Sequence(ReplaceScreenCmd(ScreenUpdateChecking), runCheckUpdateCmd(repo, m.Shared.CurrentVersion))
 			}
-			m.UpdateState.CheckError = ""
-			m = PopScreen(m)
-			return m, nil
+			m.Shared.CheckError = ""
+			return m, PopScreenCmd()
 		case "tab", "right":
-			m.UpdateState.ErrorButtonFoc = 1
+			m.ErrorButtonFoc = 1
 			return m, nil
 		case "shift+tab", "left":
-			m.UpdateState.ErrorButtonFoc = 0
+			m.ErrorButtonFoc = 0
 			return m, nil
 		case "esc":
-			m.UpdateState.CheckError = ""
-			m = PopScreen(m)
-			return m, nil
+			m.Shared.CheckError = ""
+			return m, PopScreenCmd()
 		}
 	}
 	return m, nil
 }
 
-func viewUpdateInstallErrorScreen(m Model) tea.View {
-	contentWidth := m.ContentWidth()
+// --- UpdateInstallErrorModel ---
+
+type UpdateInstallErrorModel struct {
+	Shared        *SharedState
+	ErrorButtonFoc int
+}
+
+func NewUpdateInstallErrorModel(shared *SharedState) *UpdateInstallErrorModel {
+	return &UpdateInstallErrorModel{Shared: shared}
+}
+
+func (m *UpdateInstallErrorModel) ID() Screen { return ScreenUpdateInstallError }
+func (m *UpdateInstallErrorModel) Init() tea.Cmd { return nil }
+
+func (m *UpdateInstallErrorModel) View() tea.View {
+	contentWidth := m.Shared.ContentWidth()
 	body := BodyStyle.Render("Ошибка при установке:")
 	if pad := contentWidth - lipgloss.Width(body); pad > 0 {
 		body += BodyStyle.Render(strings.Repeat(" ", pad))
 	}
 	body += "\n\n"
-	line2 := BodyStyle.Render("  ") + ErrorStyle.Render(m.UpdateState.InstallError)
+	line2 := BodyStyle.Render("  ") + ErrorStyle.Render(m.Shared.InstallError)
 	if pad := contentWidth - lipgloss.Width(line2); pad > 0 {
 		line2 += BodyStyle.Render(strings.Repeat(" ", pad))
 	}
 	body += line2 + "\n\n" + BodyStyle.Render("  ")
 	retryBtn := ButtonStyle.Render("[ Retry ]")
 	cancelBtn := ButtonStyle.Render("[ Cancel ]")
-	if m.UpdateState.ErrorButtonFoc == 0 {
+	if m.ErrorButtonFoc == 0 {
 		retryBtn = ButtonActiveStyle.Render("[ Retry ]")
 	} else {
 		cancelBtn = ButtonActiveStyle.Render("[ Cancel ]")
@@ -233,46 +260,53 @@ func viewUpdateInstallErrorScreen(m Model) tea.View {
 		pad = 0
 	}
 	body += FooterStyle.Render(footerStr+strings.Repeat(" ", pad)) + "\n" + FooterStyle.Render(strings.Repeat(" ", contentWidth))
-	rendered := FrameWithTitle("  Ошибка установки  ", body, contentWidth)
-	return tea.NewView(rendered)
+	return tea.NewView(FrameWithTitle("  Ошибка установки  ", body, contentWidth))
 }
 
-func updateUpdateInstallErrorScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *UpdateInstallErrorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "enter":
-			if m.UpdateState.ErrorButtonFoc == 0 {
+			if m.ErrorButtonFoc == 0 {
 				repo := updater.DefaultRepo
-				if m.Config != nil && m.Config.UpdateRepo != "" {
-					repo = m.Config.UpdateRepo
+				if m.Shared.Config != nil && m.Shared.Config.UpdateRepo != "" {
+					repo = m.Shared.Config.UpdateRepo
 				}
-				m.Progress.Title = "Update"
-				m.Progress.Status = "Скачивание и установка..."
-				m.Progress.Percent = -1
-				m = ReplaceScreen(m, ScreenProgress)
-				return m, runInstallCmd(repo, m.AvailableVersion)
+				m.Shared.InstallError = ""
+				return m, tea.Sequence(ReplaceScreenCmd(ScreenProgress), runInstallCmd(repo, m.Shared.AvailableVersion))
 			}
-			m.UpdateState.InstallError = ""
-			m = PopScreen(m)
-			return m, nil
+			m.Shared.InstallError = ""
+			return m, PopScreenCmd()
 		case "tab", "right":
-			m.UpdateState.ErrorButtonFoc = 1
+			m.ErrorButtonFoc = 1
 			return m, nil
 		case "shift+tab", "left":
-			m.UpdateState.ErrorButtonFoc = 0
+			m.ErrorButtonFoc = 0
 			return m, nil
 		case "esc":
-			m.UpdateState.InstallError = ""
-			m = PopScreen(m)
-			return m, nil
+			m.Shared.InstallError = ""
+			return m, PopScreenCmd()
 		}
 	}
 	return m, nil
 }
 
-func viewUpdateSuccessScreen(m Model) tea.View {
-	contentWidth := m.ContentWidth()
+// --- UpdateSuccessModel ---
+
+type UpdateSuccessModel struct {
+	Shared *SharedState
+}
+
+func NewUpdateSuccessModel(shared *SharedState) *UpdateSuccessModel {
+	return &UpdateSuccessModel{Shared: shared}
+}
+
+func (m *UpdateSuccessModel) ID() Screen { return ScreenUpdateSuccess }
+func (m *UpdateSuccessModel) Init() tea.Cmd { return nil }
+
+func (m *UpdateSuccessModel) View() tea.View {
+	contentWidth := m.Shared.ContentWidth()
 	body := BodyStyle.Render("Обновление установлено.")
 	if pad := contentWidth - lipgloss.Width(body); pad > 0 {
 		body += BodyStyle.Render(strings.Repeat(" ", pad))
@@ -289,11 +323,10 @@ func viewUpdateSuccessScreen(m Model) tea.View {
 		pad = 0
 	}
 	body += FooterStyle.Render(footerStr+strings.Repeat(" ", pad)) + "\n" + FooterStyle.Render(strings.Repeat(" ", contentWidth))
-	rendered := FrameWithTitle("  Установлено  ", body, contentWidth)
-	return tea.NewView(rendered)
+	return tea.NewView(FrameWithTitle("  Установлено  ", body, contentWidth))
 }
 
-func updateUpdateSuccessScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *UpdateSuccessModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, ok := msg.(tea.KeyPressMsg); ok {
 		return m, tea.Quit
 	}

@@ -9,15 +9,35 @@ import (
 	"github.com/ai-launcher/cli/internal/config"
 )
 
-func viewTokenScreen(m Model) tea.View {
-	contentWidth := m.ContentWidth()
+// TokenModel is the API token input screen.
+type TokenModel struct {
+	Shared   *SharedState
+	Input    string
+	Error    string
+	ButtonFoc TokenButton
+}
+
+// NewTokenModel creates a new token screen model.
+func NewTokenModel(shared *SharedState) *TokenModel {
+	return &TokenModel{Shared: shared, ButtonFoc: TokenButtonOK}
+}
+
+// ID implements ScreenModel.
+func (m *TokenModel) ID() Screen { return ScreenToken }
+
+// Init implements tea.Model.
+func (m *TokenModel) Init() tea.Cmd { return nil }
+
+// View implements tea.Model.
+func (m *TokenModel) View() tea.View {
+	contentWidth := m.Shared.ContentWidth()
 	body := BodyStyle.Render("Enter your API token to continue:")
 	body += "\n\n" + BodyStyle.Render("  ")
 	fieldWidth := contentWidth - 6
 	if fieldWidth < 20 {
 		fieldWidth = 20
 	}
-	mask := strings.Repeat("*", len(m.Token.Input))
+	mask := strings.Repeat("*", len(m.Input))
 	if mask == "" {
 		mask = " "
 	}
@@ -29,14 +49,14 @@ func viewTokenScreen(m Model) tea.View {
 	body += "\n\n" + BodyStyle.Render("  ")
 	okBtn := ButtonStyle.Render("[ OK ]")
 	cancelBtn := ButtonStyle.Render("[ Cancel ]")
-	if m.Token.ButtonFoc == TokenButtonOK {
+	if m.ButtonFoc == TokenButtonOK {
 		okBtn = ButtonActiveStyle.Render("[ OK ]")
 	} else {
 		cancelBtn = ButtonActiveStyle.Render("[ Cancel ]")
 	}
 	body += okBtn + BodyStyle.Render("  ") + cancelBtn + "\n"
-	if m.Token.Error != "" {
-		body += "\n" + BodyStyle.Render("  ") + ErrorStyle.Render(m.Token.Error) + "\n"
+	if m.Error != "" {
+		body += "\n" + BodyStyle.Render("  ") + ErrorStyle.Render(m.Error) + "\n"
 	}
 	footerStr := "F1 Help   Tab: switch button   Enter: confirm   Esc: back   F10 Exit"
 	pad := contentWidth - lipgloss.Width(footerStr)
@@ -44,63 +64,60 @@ func viewTokenScreen(m Model) tea.View {
 		pad = 0
 	}
 	body += "\n" + FooterStyle.Render(footerStr+strings.Repeat(" ", pad)) + "\n" + FooterStyle.Render(strings.Repeat(" ", contentWidth))
-	rendered := FrameWithTitle("  API TOKEN  ", body, contentWidth)
-	return tea.NewView(rendered)
+	return tea.NewView(FrameWithTitle("  API TOKEN  ", body, contentWidth))
 }
 
-func updateTokenScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+// Update implements tea.Model.
+func (m *TokenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		s := msg.String()
 		switch s {
 		case "enter":
-			if m.Token.ButtonFoc == TokenButtonOK {
-				if err := config.ValidateAPIKey(m.Token.Input); err != nil {
-					m.Token.Error = err.Error()
+			if m.ButtonFoc == TokenButtonOK {
+				if err := config.ValidateAPIKey(m.Input); err != nil {
+					m.Error = err.Error()
 					return m, nil
 				}
-				cfg := m.Config
+				cfg := m.Shared.Config
 				if cfg == nil {
 					cfg = &config.Config{}
 				}
-				cfg.APIKey = strings.TrimSpace(m.Token.Input)
+				cfg.APIKey = strings.TrimSpace(m.Input)
 				if err := config.Save(cfg); err != nil {
-					m.Token.Error = err.Error()
+					m.Error = err.Error()
 					return m, nil
 				}
-				m.Config = cfg
-				m.Token.Error = ""
-				m.Token.Input = ""
-				m = PopScreen(m)
-				return m, nil
+				m.Shared.Config = cfg
+				m.Error = ""
+				m.Input = ""
+				return m, PopScreenCmd()
 			}
-			m.Token.Error = ""
-			m.Token.Input = ""
-			m = PopScreen(m)
-			return m, nil
+			m.Error = ""
+			m.Input = ""
+			return m, PopScreenCmd()
 		case "tab", "right":
-			m.Token.ButtonFoc = TokenButtonCancel
-			m.Token.Error = ""
+			m.ButtonFoc = TokenButtonCancel
+			m.Error = ""
 			return m, nil
 		case "shift+tab", "left":
-			m.Token.ButtonFoc = TokenButtonOK
-			m.Token.Error = ""
+			m.ButtonFoc = TokenButtonOK
+			m.Error = ""
 			return m, nil
 		case "esc":
-			m.Token.Error = ""
-			m.Token.Input = ""
-			m = PopScreen(m)
-			return m, nil
+			m.Error = ""
+			m.Input = ""
+			return m, PopScreenCmd()
 		case "backspace":
-			if len(m.Token.Input) > 0 {
-				m.Token.Input = m.Token.Input[:len(m.Token.Input)-1]
-				m.Token.Error = ""
+			if len(m.Input) > 0 {
+				m.Input = m.Input[:len(m.Input)-1]
+				m.Error = ""
 			}
 			return m, nil
 		default:
 			if len(s) == 1 && s[0] >= 32 && s[0] != 127 {
-				m.Token.Input += s
-				m.Token.Error = ""
+				m.Input += s
+				m.Error = ""
 				return m, nil
 			}
 		}

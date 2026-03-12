@@ -10,52 +10,68 @@ import (
 	"github.com/ai-launcher/cli/internal/updater"
 )
 
-func viewMainScreen(m Model) tea.View {
-	versionStr := m.CurrentVersion
+// MainModel is the main menu screen.
+type MainModel struct {
+	Shared        *SharedState
+	SelectedIndex int
+}
+
+// NewMainModel creates a new main menu model.
+func NewMainModel(shared *SharedState) *MainModel {
+	return &MainModel{Shared: shared}
+}
+
+// ID implements ScreenModel.
+func (m *MainModel) ID() Screen { return ScreenMain }
+
+// Init implements tea.Model.
+func (m *MainModel) Init() tea.Cmd { return nil }
+
+// View implements tea.Model.
+func (m *MainModel) View() tea.View {
+	s := m.Shared
+	versionStr := s.CurrentVersion
 	if versionStr == "" {
 		versionStr = "0.0.0"
 	}
-	contentWidth := m.ContentWidth()
+	contentWidth := s.ContentWidth()
 	body := SectionStyle.Render("Commands:")
 	if pad := contentWidth - lipgloss.Width(body); pad > 0 {
 		body += SectionStyle.Render(strings.Repeat(" ", pad))
 	}
 	body += "\n\n"
 	sel := m.SelectedIndex
-	for i, label := range m.Commands {
+	for i, label := range s.Commands {
 		num := fmt.Sprintf("%d.", i+1)
-		// Префикс "  1. " целиком в синем фоне, чтобы не было чёрных полос между цифрой и текстом
 		line := BodyStyle.Render("  " + num + " ")
 		displayLabel := label
-		if i < len(m.CommandNames) && m.CommandNames[i] == "autoupdate" && m.AvailableVersion != "" {
-			displayLabel = label + "  " + HelpKeyStyle.Render("— доступно обновление до "+m.AvailableVersion)
+		if i < len(s.CommandNames) && s.CommandNames[i] == "autoupdate" && s.AvailableVersion != "" {
+			displayLabel = label + "  " + HelpKeyStyle.Render("— доступно обновление до "+s.AvailableVersion)
 		}
 		if i == sel {
 			line += HighlightStyle.Render(displayLabel)
 		} else {
 			line += BodyStyle.Render(displayLabel)
 		}
-		// Добиваем строку до полной ширины синим фоном, чтобы справа не было чёрного
 		if pad := contentWidth - lipgloss.Width(line); pad > 0 {
 			line += BodyStyle.Render(strings.Repeat(" ", pad))
 		}
 		body += line + "\n"
 	}
-	footerStr := fmt.Sprintf("↑/↓ or 1-%d: select   Enter: run   F1 Help   F7 Token   F10 Exit", len(m.Commands))
+	footerStr := fmt.Sprintf("↑/↓ or 1-%d: select   Enter: run   F1 Help   F7 Token   F10 Exit", len(s.Commands))
 	pad := contentWidth - lipgloss.Width(footerStr)
 	if pad < 0 {
 		pad = 0
 	}
-	// Вся строка футера одним рендером — синий фон до конца, без чёрных клеток после "F10 Exit"
 	footerLine := FooterStyle.Render(footerStr + strings.Repeat(" ", pad))
-	body += "\n" + footerLine
-	body += "\n" + FooterStyle.Render(strings.Repeat(" ", contentWidth))
-	rendered := FrameWithTitleSubtitle("  AI LAUNCHER  ", "  v "+versionStr, body, m.ContentWidth())
+	body += "\n" + footerLine + "\n" + FooterStyle.Render(strings.Repeat(" ", contentWidth))
+	rendered := FrameWithTitleSubtitle("  AI LAUNCHER  ", "  v "+versionStr, body, contentWidth)
 	return tea.NewView(rendered)
 }
 
-func updateMainScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	n := len(m.Commands)
+// Update implements tea.Model.
+func (m *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	n := len(m.Shared.Commands)
 	if n == 0 {
 		return m, nil
 	}
@@ -63,13 +79,10 @@ func updateMainScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "f7":
-			m.Token.Input = ""
-			m.Token.Error = ""
-			if m.Config != nil {
-				m.Config.APIKey = ""
+			if m.Shared.Config != nil {
+				m.Shared.Config.APIKey = ""
 			}
-			m = PushScreen(m, ScreenToken)
-			return m, nil
+			return m, PushScreenCmd(ScreenToken)
 		case "up", "k":
 			m.SelectedIndex--
 			if m.SelectedIndex < 0 {
@@ -90,22 +103,18 @@ func updateMainScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "enter":
 			idx := m.SelectedIndex
-			if idx >= 0 && idx < len(m.CommandNames) && m.CommandNames[idx] == "autoupdate" {
-				if m.AvailableVersion != "" {
-					m = PushScreen(m, ScreenUpdateConfirm)
-					return m, nil
+			if idx >= 0 && idx < len(m.Shared.CommandNames) && m.Shared.CommandNames[idx] == "autoupdate" {
+				if m.Shared.AvailableVersion != "" {
+					return m, PushScreenCmd(ScreenUpdateConfirm)
 				}
 				repo := updater.DefaultRepo
-				if m.Config != nil && m.Config.UpdateRepo != "" {
-					repo = m.Config.UpdateRepo
+				if m.Shared.Config != nil && m.Shared.Config.UpdateRepo != "" {
+					repo = m.Shared.Config.UpdateRepo
 				}
-				m.Progress.Title = "Проверка обновлений"
-				m.Progress.Status = "Проверка обновлений..."
-				m.Progress.Percent = -1
-				m = PushScreen(m, ScreenUpdateChecking)
-				return m, runCheckUpdateCmd(repo, m.CurrentVersion)
+				m.Shared.RunCommandIndex = -1
+				return m, tea.Sequence(PushScreenCmd(ScreenUpdateChecking), runCheckUpdateCmd(repo, m.Shared.CurrentVersion))
 			}
-			m.RunCommandIndex = m.SelectedIndex
+			m.Shared.RunCommandIndex = m.SelectedIndex
 			return m, tea.Quit
 		}
 	}
