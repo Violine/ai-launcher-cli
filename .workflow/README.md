@@ -124,13 +124,13 @@ ai-launcher-cli/
 │   │   ├── agentrun/       # запуск AI-агентов (exec)
 │   │   └── autoupdate/     # проверка обновлений (вызов internal/updater)
 │   └── tui/                # TUI (Bubble Tea + Lip Gloss)
-│       ├── model.go        # Model, ScreenStack, PushScreen/PopScreen/ReplaceScreen, Update/View
+│       ├── model.go        # RootModel, SharedState, ScreenModel, навигационные Msg/Cmd, newScreenFactory
 │       ├── styles.go       # стили (FrameWithTitle, кнопки, цвета по спецификации 5.1)
-│       ├── screen_main.go  # главное меню (список команд)
-│       ├── screen_token.go # ввод API-токена
-│       ├── screen_help.go  # справка по клавишам
-│       ├── screen_progress.go # экран прогресса (загрузка, установка)
-│       └── screen_update.go   # экраны обновления (подтверждение, ошибки, успех)
+│       ├── screen_main.go  # MainModel — главное меню
+│       ├── screen_token.go # TokenModel — ввод API-токена
+│       ├── screen_help.go  # HelpModel — справка
+│       ├── screen_progress.go # ProgressModel — прогресс / проверка обновлений
+│       └── screen_update.go   # UpdateConfirmModel, UpdateCheckError/InstallError/SuccessModel, runCheckUpdateCmd, runInstallCmd
 ├── pkg/plugin/             # интерфейс плагина (Name, Run)
 ├── api/                    # типы/клиенты протоколов MCP и Agent
 ├── configs/                # примеры YAML (config.example.yaml)
@@ -148,48 +148,37 @@ ai-launcher-cli/
 
 ### Как устроена навигация
 
-TUI использует **стек экранов** (pushdown automaton): текущий экран — вершина стека, переходы выполняются тремя операциями без мутации модели (в духе Elm/Bubble Tea).
+TUI использует **стек экранов** (pushdown automaton): каждый экран — отдельная модель (`ScreenModel`), корневая модель (`RootModel`) хранит стек и общее состояние (`SharedState`). Переходы выполняются **сообщениями**: экран возвращает команду (`PushScreenCmd`, `PopScreenCmd`, `ReplaceScreenCmd`), корень обрабатывает сообщение и обновляет стек.
 
 | Операция | Назначение | Пример |
 |----------|------------|--------|
-| **PushScreen(m, s)** | Открыть экран поверх текущего; с него можно вернуться «назад» | F1 Help, F7 Token, пункт меню «Обновление» → подтверждение |
-| **PopScreen(m)** | Закрыть текущий экран и вернуться к предыдущему | Esc в Help/Token, «Нет»/Esc в диалоге обновления, Cancel на экранах ошибок |
-| **ReplaceScreen(m, s)** | Заменить текущий экран на другой (без добавления в стек); «назад» на предыдущий шаг потока нельзя | Подтверждение «Да» → Progress, Progress → Success/InstallError, Retry → Checking |
+| **PushScreenCmd(s)** | Открыть экран поверх текущего; с него можно вернуться «назад» | F1 Help, F7 Token, пункт меню «Обновление» → подтверждение |
+| **PopScreenCmd()** | Закрыть текущий экран и вернуться к предыдущему | Esc в Help/Token, «Нет»/Esc в диалоге обновления, Cancel на экранах ошибок |
+| **ReplaceScreenCmd(s)** | Заменить текущий экран на другой (без добавления в стек) | Подтверждение «Да» → Progress, Retry → Checking |
 
-- **Модель:** `Model.ScreenStack []Screen` — слайс экранов, верхний = активный. Метод `CurrentScreen()` возвращает вершину стека (или `ScreenMain`, если стек пуст).
-- **Роутинг:** в `Model.Update` и `Model.View` используется `m.CurrentScreen()`; по нему вызывается соответствующая функция `update*Screen` / `view*Screen`.
-- **Глобальные сообщения** (размер окна, результат проверки обновлений, результат установки) обрабатываются в `Update` до делегирования по экрану; смена экрана по ним — через `ReplaceScreen` или `PushScreen` (например, фоновая ошибка проверки — `PushScreen(ScreenUpdateCheckError)`).
+- **RootModel:** хранит `Stack []ScreenModel`, `Shared *SharedState`, фабрику `NewScreen func(Screen) ScreenModel`. В `Update` обрабатывает глобальные сообщения (WindowSizeMsg, UpdateCheckResultMsg, InstallDoneMsg и т.д.) и навигационные (PushScreenMsg, PopScreenMsg, ReplaceScreenMsg); остальное делегирует `current().Update(msg)`. В `View` возвращает `current().View()`.
+- **SharedState:** Config, Commands, CommandNames, Width, Height, версии, RunCommandIndex, тексты ошибок обновления; метод `ContentWidth()`.
+- **ScreenModel:** интерфейс (`tea.Model` + `ID() Screen`). Реализации: MainModel, TokenModel, HelpModel, ProgressModel, UpdateConfirmModel, UpdateCheckErrorModel, UpdateInstallErrorModel, UpdateSuccessModel.
 
-Подробнее: `internal/tui/model.go` (типы `Screen`, функции `PushScreen`, `PopScreen`, `ReplaceScreen`).
+Подробнее: `internal/tui/model.go`, `internal/tui/README.md`.
 
 ### Как добавить новый экран
 
-1. **Добавить константу в enum `Screen`** в `internal/tui/model.go`:
-   ```go
-   const (
-       // ...
-       ScreenUpdateSuccess
-       ScreenMyNew        // новый экран
-   )
-   ```
+1. **Добавить константу в enum `Screen`** в `internal/tui/model.go`.
 
-2. **При необходимости добавить состояние экрана** в `Model` (как `TokenScreenState`, `UpdateScreenState`) или переиспользовать существующие поля.
+2. **Создать тип, реализующий `ScreenModel`:**
+   - поля: `*SharedState` (и при необходимости своё состояние);
+   - методы: `ID() Screen`, `Init() tea.Cmd`, `View() tea.View`, `Update(tea.Msg) (tea.Model, tea.Cmd)`.
 
-3. **Реализовать отрисовку и обработку сообщений.** Варианты:
-   - добавить файл `internal/tui/screen_mynew.go` с функциями `viewMyNewScreen(m Model) tea.View` и `updateMyNewScreen(m Model, msg tea.Msg) (tea.Model, tea.Cmd)`;
-   - либо разместить их в подходящем существующем файле (например, в `screen_update.go` для экранов того же потока).
+3. **Зарегистрировать в фабрике** в `model.go`, в функции `newScreenFactory`: добавить ветку `case ScreenMyNew: return NewMyNewModel(root.Shared)` и при необходимости конструктор `NewMyNewModel`.
 
-4. **Подключить в роутинг** в `model.go`:
-   - в `Update`: в `switch m.CurrentScreen()` добавить ветку `case ScreenMyNew: return updateMyNewScreen(m, msg)`;
-   - в `View`: в `switch m.CurrentScreen()` добавить ветку `case ScreenMyNew: return viewMyNewScreen(m)`.
+4. **Переходы** с других экранов — возвратом команд из `Update`: `return m, PushScreenCmd(ScreenMyNew)` или `return m, PopScreenCmd()` и т.д.
 
-5. **Переходы на новый экран и обратно** — только через стек:
-   - открыть поверх текущего (с возможностью «назад»): `m = PushScreen(m, ScreenMyNew)`; возврат: `m = PopScreen(m)`;
-   - заменить текущий экран (без «назад» в рамках этого шага): `m = ReplaceScreen(m, ScreenMyNew)`.
+5. **Глобальные сообщения:** если экран должен открываться по сообщению (как при ошибке проверки обновлений), в `RootModel.Update` в обработчике этого сообщения вызвать `m.pushScreen(ScreenMyNew)` или заменить вершину стека.
 
-6. **Глобальные сообщения:** если экран должен открываться по сообщению (аналогично `UpdateCheckErrorMsg`), в обработчике этого сообщения в `Model.Update` вызвать `PushScreen` или `ReplaceScreen`.
+Добавление экрана не требует правки `switch` в корне — только новый тип и регистрация в фабрике.
 
-Стили рамок и текста — в `internal/tui/styles.go` (`FrameWithTitle`, `FrameWithTitleSubtitle`, `BodyStyle`, `ButtonStyle` и т.д.).
+Стили рамок и текста — в `internal/tui/styles.go`.
 
 ---
 
